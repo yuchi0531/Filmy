@@ -55,6 +55,7 @@ class FilmarksClient:
         timeout: float | None = None,
         interval: float | None = None,
         headers: dict[str, str] | None = None,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.base_url = (base_url or settings.filmarks_base_url).rstrip("/")
         self.timeout = timeout if timeout is not None else settings.request_timeout
@@ -77,6 +78,7 @@ class FilmarksClient:
             timeout=httpx.Timeout(self.timeout),
             follow_redirects=True,
             headers=default_headers,
+            transport=transport,
         )
 
     def get_html(self, path: str) -> str:

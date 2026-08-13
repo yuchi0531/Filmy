@@ -48,6 +48,16 @@ class CacheManager:
         cache = self._cache_for(namespace, ttl)
         cache[key] = value
 
+    def clear(self) -> None:
+        """全名前空間のキャッシュと TTL 記録を空にする。
+
+        テストの分離等で、private 属性（``_caches``/``_ttls``）に直接触らずに
+        キャッシュをリセットするためのパブリックAPI。
+        """
+        with self._lock:
+            self._caches.clear()
+            self._ttls.clear()
+
 
 # アプリ全体で共有するシングルトンインスタンス
 cache_manager = CacheManager()
