@@ -1,0 +1,36 @@
+app = "filmy-backend"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # 必要に応じて環境変数を設定
+  # FILMY_FILMARKS_BASE_URL = "https://filmarks.com"
+  # FILMY_REQUEST_TIMEOUT = "15"
+  # FILMY_REQUEST_INTERVAL = "5"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 1000
+
+  [http_service.checks]
+    [http_service.checks.health]
+      interval = "30s"
+      timeout = "5s"
+      grace_period = "10s"
+      method = "get"
+      path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
