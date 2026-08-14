@@ -30,6 +30,17 @@ class FakeFilmarksClient:
             return mock_html.SCHEDULE_JSON
         raise AssertionError(f"予期しないパスがリクエストされました: {path!r}")
 
+    def get_html_batch(self, paths: list[str]) -> list[str | None]:
+        return [self._respond(path) for path in paths]
+
+    def _respond(self, path: str) -> str | None:
+        self.calls.append(path)
+        if path in self.pages:
+            return self.pages[path]
+        if path.startswith("/pia_theaters/"):
+            return mock_html.SCHEDULE_JSON
+        return None
+
     def close(self) -> None:
         pass
 

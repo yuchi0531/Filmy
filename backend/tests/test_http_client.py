@@ -139,3 +139,58 @@ def test_throttle_interval_respected(monkeypatch):
     # 2回目のリクエストが interval 以上待たされる
     assert calls == ["/a", "/b"]
     assert elapsed >= interval - 0.005
+
+
+def test_batch_fetches_in_parallel(monkeypatch):
+    """バッチ内は並列実行され、逐次（interval × N）より十分高速なこと。"""
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(str(request.url.path))
+        return httpx.Response(200, text="ok", request=request)
+
+    interval = 0.05
+    monkeypatch.setattr(
+        "app.scrapers.http_client._throttle_interval", interval
+    )
+    client = _client(handler)
+    try:
+        start = time.monotonic()
+        results = client.get_html_batch(["/a", "/b", "/c"])
+        elapsed = time.monotonic() - start
+    finally:
+        client.close()
+
+    assert results == ["ok", "ok", "ok"]
+    assert sorted(calls) == ["/a", "/b", "/c"]
+    # 並列実行のため、逐次の interval*3 より十分短い（スロットルは1回のみ）
+    assert elapsed < interval * 3
+
+
+def test_batch_throttle_between_batches(monkeypatch):
+    """バッチ間で interval 以上の間隔が空くこと。"""
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(str(request.url.path))
+        return httpx.Response(200, text="ok", request=request)
+
+    interval = 0.05
+    monkeypatch.setattr(
+        "app.scrapers.http_client._throttle_interval", interval
+    )
+    monkeypatch.setattr(
+        "app.scrapers.http_client._last_request_at",
+        time.monotonic() - interval,
+    )
+    client = _client(handler)
+    try:
+        client.get_html_batch(["/a"])
+        start = time.monotonic()
+        client.get_html_batch(["/b"])
+        elapsed = time.monotonic() - start
+    finally:
+        client.close()
+
+    # 2回目のバッチは前回バッチ後から interval 以上待つ
+    assert elapsed >= interval - 0.005

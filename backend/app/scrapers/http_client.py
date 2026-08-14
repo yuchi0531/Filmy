@@ -2,6 +2,7 @@
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin
 
 import httpx
@@ -93,6 +94,38 @@ class FilmarksClient:
             raise FilmarksUnavailableError(f"通信エラー: {url} ({exc})") from exc
         self._raise_for_status(response)
         return response.text
+
+    def get_html_batch(self, paths: list[str]) -> list[str | None]:
+        """複数のパスを並列に取得し、各結果（失敗は None）を入力順で返す。
+
+        「劇場詳細1件 = 1論理操作」とみなし、バッチ全体の前にスロットルを1回だけ
+        適用する。バッチ内は並列で投げ、個々の失敗は例外を投げずに None を返す。
+        バッチ終了後は `_last_request_at` を更新し、次のバッチ/リクエストが
+        再び interval 分待つようにする。
+        """
+        if not paths:
+            return []
+        _wait_interval()  # バッチ全体の前に1回スロットル
+
+        def _fetch_one(path: str) -> str | None:
+            url = urljoin(f"{self.base_url}/", path)
+            try:
+                response = self._client.get(url)
+            except httpx.RequestError:
+                return None
+            try:
+                self._raise_for_status(response)
+            except FilmarksError:
+                return None
+            return response.text
+
+        with ThreadPoolExecutor(max_workers=len(paths)) as executor:
+            results = list(executor.map(_fetch_one, paths))
+
+        global _last_request_at
+        with _throttle_lock:
+            _last_request_at = time.monotonic()
+        return results
 
     def _raise_for_status(self, response: httpx.Response) -> None:
         """ステータスコードを検査し、エラーを例外に変換する。"""

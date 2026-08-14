@@ -230,11 +230,6 @@ class TheaterDetailScraper(BaseScraper):
         # しているため再取得頻度は低い。Filmarksは毎週火曜更新のため鮮度も十分。
         self.schedule_days = max(1, schedule_days)
 
-    def _fetch_json(self, path: str) -> dict:
-        """JSON API のレスポンスを dict で返す。"""
-        raw = self.client.get_html(path)
-        return json.loads(raw)
-
     def parse(self, soup: BeautifulSoup) -> TheaterDetail:
         """詳細ページの静止HTML部分（名前・住所・地図URL等）を TheaterDetail にパースする。
 
@@ -293,13 +288,22 @@ class TheaterDetailScraper(BaseScraper):
         movies: dict[str, MovieSchedule] = {}
 
         today = date.today()
-        for i in range(self.schedule_days):
-            day = today + timedelta(days=i)
-            date_str = day.isoformat()
+        date_strs = [
+            (today + timedelta(days=i)).isoformat()
+            for i in range(self.schedule_days)
+        ]
+        paths = [
+            f"/pia_theaters/{theater_id}/movies?schedule_date={date_str}"
+            for date_str in date_strs
+        ]
+
+        raw_responses = self.client.get_html_batch(paths)
+
+        for date_str, raw in zip(date_strs, raw_responses):
+            if raw is None:
+                continue
             try:
-                data = self._fetch_json(
-                    f"/pia_theaters/{theater_id}/movies?schedule_date={date_str}"
-                )
+                data = json.loads(raw)
             except Exception:
                 continue
             for mv in data.get("movies", []) or []:
