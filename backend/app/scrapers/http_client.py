@@ -119,7 +119,11 @@ class FilmarksClient:
                 return None
             return response.text
 
-        with ThreadPoolExecutor(max_workers=len(paths)) as executor:
+        # Filmarks への同時接続数を制限し、バーストアクセス（過剰負荷）を防ぐ。
+        # paths の件数分だけ並列に投げると、5秒スロットルの意図が骨抜きになるため
+        # 同時実行ワーカー数を最大5に制限する。
+        max_workers = min(len(paths), 5)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = list(executor.map(_fetch_one, paths))
 
         global _last_request_at

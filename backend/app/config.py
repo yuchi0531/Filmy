@@ -27,8 +27,19 @@ class Settings(BaseSettings):
         "Chrome/131.0.0.0 Safari/537.36"
     )
 
-    # クライアント認証用のAPIキー（空文字なら認証を無効化＝ローカル開発用）
+    # 実行環境（development / production）。
+    # production ではAPIキー未設定（api_key=""）を認めず起動時に失敗（fail-closed）させる。
+    environment: str = "development"
+
+    # クライアント認証用のAPIキー。
+    # - development では空文字なら認証をスキップ（ローカル開発・既存テスト互換）。
+    # - production では空文字を許さない（auth.require_api_key が 503 を返す）。
     api_key: str = ""
+
+    # 信頼できるリバースプロキシのIP（カンマ区切り）。
+    # ここに列挙されたプロキシ経由のリクエストのみ X-Forwarded-For を信頼する。
+    # 未設定（空）なら XFF を一切信頼せず、直結IP（request.client.host）を使う。
+    trusted_proxies: str = ""
 
     # クライアント向けレート制限（IPごとの1分あたり最大リクエスト数）
     rate_limit_per_minute: int = 60
