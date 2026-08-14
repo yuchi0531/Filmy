@@ -24,6 +24,11 @@ class FilmyApplication : Application() {
      * DataStore に保存済みのベース URL を [ApiClient] へ反映する。
      * アプリ起動時に一度だけ同期読み込みするため、初回画面が apiService を取得する前に反映が完了する。
      * 保存値が不正な場合はデフォルトのままにして起動を継続する。
+     *
+     * 注意: [runBlocking] によるメインスレッドでの同期読み込みは ANR リスクがあるが、
+     * DataStore の初期値は小さな JSON ファイル（1 エントリ）でディスク読み込みが高速なため
+     * 実用上問題にならない。[ApiClient] を遅延初期化に変える改修は影響範囲が大きく今回は見送る。
+     * 読み込み失敗・不正 URL はそれぞれ try/catch でフォールバック（デフォルト URL 維持）済み。
      */
     private fun restoreApiBaseUrl() {
         val saved = try {

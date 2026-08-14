@@ -24,12 +24,6 @@ object ApiClient {
     @Volatile
     private var service: FilmyApiService? = null
 
-    private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
-        // X-API-Key をログへ漏らさないためのヘッダー Redact。
-        redactHeader("X-API-Key")
-    }
-
     /**
      * 全リクエストに `X-API-Key` ヘッダーを付与する Interceptor。
      * キーは BuildConfig.API_KEY（Koyeb の FILMY_API_KEY と同値）を参照する。
@@ -41,9 +35,23 @@ object ApiClient {
         chain.proceed(request)
     }
 
+    /**
+     * HTTP ログ出力用 Interceptor。リクエスト/レスポンス本文（現在地 lat/lng 含む）を
+     * logcat へ漏らさないため、debug ビルド限定で追加する（release では生成しない）。
+     */
+    private val loggingInterceptor = HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY
+        // X-API-Key をログへ漏らさないためのヘッダー Redact。
+        redactHeader("X-API-Key")
+    }
+
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(apiKeyInterceptor)
-        .addInterceptor(loggingInterceptor)
+        .apply {
+            if (BuildConfig.DEBUG) {
+                addInterceptor(loggingInterceptor)
+            }
+        }
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()

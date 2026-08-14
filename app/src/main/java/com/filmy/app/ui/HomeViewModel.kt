@@ -50,9 +50,10 @@ class HomeViewModel : ViewModel() {
      * 失敗した場合は現在の表示を保持する。
      */
     fun refresh() {
-        if (_isRefreshing.value) return
+        // L6: フラグのセットをコルーチン起動前（同期的）に原子的に行い、
+        // check-then-act の競合による二重フェッチを防ぐ。
+        if (!_isRefreshing.compareAndSet(false, true)) return
         viewModelScope.launch {
-            _isRefreshing.value = true
             try {
                 _uiState.value = UiState.Success(fetch())
             } catch (e: Exception) {

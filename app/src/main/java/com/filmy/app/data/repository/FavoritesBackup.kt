@@ -88,6 +88,15 @@ object BackupSerializer {
     fun serialize(movies: List<BackupMovie>, theaters: List<BackupTheater>): String =
         gson.toJson(FavoritesBackup(version = 1, movies = movies, theaters = theaters))
 
-    fun deserialize(json: String): FavoritesBackup =
-        gson.fromJson(json, FavoritesBackup::class.java)
+    fun deserialize(json: String): FavoritesBackup {
+        // L9: Gson はフィールドへ null を直接注入し得る（例: `null` や `{"movies": null}`）。
+        // 非null型フィールドでも実行時には null になり得るため、トップレベルの null は
+        // 空バックアップへ、movies/theaters の null は空リストへ正規化して NPE を防ぐ。
+        val backup = gson.fromJson(json, FavoritesBackup::class.java)
+            ?: return FavoritesBackup()
+        return backup.copy(
+            movies = backup.movies.orEmpty(),
+            theaters = backup.theaters.orEmpty(),
+        )
+    }
 }

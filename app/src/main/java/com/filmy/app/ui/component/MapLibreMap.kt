@@ -83,6 +83,19 @@ fun MapLibreMap(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
 
+    // MapView 破棄済みフラグ。ON_DESTROY と onDispose の両方から onDestroy() が
+    // 二重に呼ばれるのを防ぎ、破棄後に発火した getMapAsync コールバックが
+    // 破棄済みビューを触らないようにするためのガード。
+    var destroyed by remember { mutableStateOf(false) }
+
+    // mapView.onDestroy() を一度だけ呼ぶ。
+    val destroyMapView = {
+        if (!destroyed) {
+            destroyed = true
+            mapView.onDestroy()
+        }
+    }
+
     // MapView のライフサイクルをホストの LifecycleOwner に委譲する。
     // DisposableEffect 実行時点では既に RESUMED のため onCreate/onStart/onResume を明示呼び出しし、
     // 以降の遷移は LifecycleEventObserver で追従する。
@@ -97,7 +110,7 @@ fun MapLibreMap(
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                Lifecycle.Event.ON_DESTROY -> destroyMapView()
                 else -> Unit
             }
         }
@@ -105,7 +118,7 @@ fun MapLibreMap(
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            mapView.onDestroy()
+            destroyMapView()
         }
     }
 
@@ -114,16 +127,23 @@ fun MapLibreMap(
     // スタイルは一度だけロードする。
     DisposableEffect(mapView) {
         mapView.getMapAsync { mapInstance ->
+            // コールバック発火前にビューが破棄されていた場合は何もしない。
+            if (destroyed) return@getMapAsync
             map = mapInstance
             mapInstance.setStyle(STYLE_URL) { styleInstance ->
-                style = styleInstance
+                if (!destroyed) style = styleInstance
             }
         }
         onDispose { /* MapView の破棄はライフサイクル側で処理済み */ }
     }
 
     // スタイルロード後、中心座標・劇場リストの変更に応じてソース・レイヤー・カメラを更新する。
-    LaunchedEffect(map, style, centerLat, centerLng, theaters) {
+    // theaters は再コンポジションのたびに新しい List インスタンスになり得るため、
+    // 内容ベースのキーを生成し、データが実質変わらない場合はカメラ再フィットを抑止する。
+    val theatersKey = remember(theaters) {
+        theaters.map { "${it.id}:${it.latitude}:${it.longitude}" }.joinToString(",")
+    }
+    LaunchedEffect(map, style, centerLat, centerLng, theatersKey) {
         val currentMap = map ?: return@LaunchedEffect
         val currentStyle = style ?: return@LaunchedEffect
         updatePins(currentStyle, currentMap, centerLat, centerLng, theaters, density)

@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -161,20 +162,23 @@ private fun NearbyContent(
     theaters: List<TheaterSummaryDto>,
     onTheaterClick: (TheaterSummaryDto) -> Unit,
 ) {
+    val pins = remember(theaters) {
+        theaters.mapNotNull { theater ->
+            val lat = theater.latitude ?: return@mapNotNull null
+            val lng = theater.longitude ?: return@mapNotNull null
+            MapTheaterPin(
+                id = theater.id,
+                name = theater.name,
+                latitude = lat,
+                longitude = lng,
+            )
+        }
+    }
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         MapLibreMap(
             centerLat = latitude,
             centerLng = longitude,
-            theaters = theaters.mapNotNull { theater ->
-                val lat = theater.latitude ?: return@mapNotNull null
-                val lng = theater.longitude ?: return@mapNotNull null
-                MapTheaterPin(
-                    id = theater.id,
-                    name = theater.name,
-                    latitude = lat,
-                    longitude = lng,
-                )
-            },
+            theaters = pins,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(280.dp),
