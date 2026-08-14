@@ -1,5 +1,6 @@
 package com.filmy.app.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.filmy.app.data.api.dto.MovieSummaryDto
 import com.filmy.app.ui.SearchViewModel
 import com.filmy.app.ui.UiState
@@ -38,9 +40,13 @@ import com.filmy.app.ui.component.ErrorState
 import com.filmy.app.ui.component.LoadingState
 import com.filmy.app.ui.component.PosterImage
 import com.filmy.app.ui.component.RatingBar
+import com.filmy.app.ui.navigation.Screen
 
 @Composable
-fun SearchScreen(viewModel: SearchViewModel = viewModel()) {
+fun SearchScreen(
+    navController: NavHostController,
+    viewModel: SearchViewModel = viewModel(),
+) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -75,6 +81,9 @@ fun SearchScreen(viewModel: SearchViewModel = viewModel()) {
                 movies = state.data.results,
                 heading = state.data.heading,
                 total = state.data.total,
+                onMovieClick = { movie ->
+                    navController.navigate(Screen.movieDetail(movie.id))
+                },
             )
         }
     }
@@ -85,6 +94,7 @@ private fun SearchResults(
     movies: List<MovieSummaryDto>,
     heading: String?,
     total: Int,
+    onMovieClick: (MovieSummaryDto) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
         val summary = if (movies.isEmpty()) {
@@ -101,18 +111,23 @@ private fun SearchResults(
             modifier = Modifier.padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(movies, key = { it.id }) { movie ->
-                MovieRow(movie = movie)
+            items(movies) { movie ->
+                MovieRow(movie = movie, onClick = { onMovieClick(movie) })
             }
         }
     }
 }
 
-/** 検索結果の横長カード（ポスター＋タイトル＋評価）。 */
+/** 検索結果の横長カード（ポスター＋タイトル＋評価）。クリックで映画詳細へ遷移する。 */
 @Composable
-private fun MovieRow(movie: MovieSummaryDto) {
+private fun MovieRow(
+    movie: MovieSummaryDto,
+    onClick: () -> Unit,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PosterImage(

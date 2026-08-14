@@ -46,30 +46,36 @@ fun MainScreen() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
 
+    // 詳細画面（WebView 含む）では下部ナビゲーションバーを非表示にする。
+    val isDetailScreen = currentRoute == Screen.MovieDetail.route ||
+        currentRoute == Screen.TheaterDetail.route ||
+        currentRoute == Screen.WebView.route
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                val items = listOf(
-                    Screen.Home to "Home",
-                    Screen.Nearby to "Nearby",
-                    Screen.Search to "Search",
-                    Screen.Favorites to "Favorites",
-                    Screen.Settings to "Settings"
-                )
-                items.forEach { (screen, title) ->
-                    NavigationBarItem(
-                        icon = {
-                            Icon(
-                                imageVector = when (screen) {
-                                    Screen.Home -> Icons.Default.Home
-                                    Screen.Nearby -> Icons.Default.LocationOn
-                                    Screen.Search -> Icons.Default.Search
-                                    Screen.Favorites -> Icons.Default.Favorite
-                                    Screen.Settings -> Icons.Default.Settings
-                                },
-                                contentDescription = title
-                            )
-                        },
+            if (!isDetailScreen) {
+                NavigationBar {
+                    val items = listOf(
+                        Screen.Home to "Home",
+                        Screen.Nearby to "Nearby",
+                        Screen.Search to "Search",
+                        Screen.Favorites to "Favorites",
+                        Screen.Settings to "Settings"
+                    )
+                    items.forEach { (screen, title) ->
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    imageVector = when (screen) {
+                                        Screen.Home -> Icons.Default.Home
+                                        Screen.Nearby -> Icons.Default.LocationOn
+                                        Screen.Search -> Icons.Default.Search
+                                        Screen.Favorites -> Icons.Default.Favorite
+                                        else -> Icons.Default.Settings
+                                    },
+                                    contentDescription = title
+                                )
+                            },
                         label = { Text(title) },
                         selected = currentRoute == screen.route,
                         onClick = {
@@ -85,6 +91,7 @@ fun MainScreen() {
                 }
             }
         }
+    }
     ) { innerPadding ->
         NavGraph(navController = navController, modifier = Modifier.padding(innerPadding))
     }

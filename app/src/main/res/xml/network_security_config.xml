@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- 開発用: WebView で外部 http 公式サイトも表示できるよう、全ドメインで cleartext を許可する。
+         usesCleartextTraffic="true" の意図（全許可）と整合させる。 -->
+    <base-config cleartextTrafficPermitted="true" />
+    <!-- エミュレータ上のローカル開発サーバ（10.0.2.2）も明示的に許可する。 -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">10.0.2.2</domain>
     </domain-config>

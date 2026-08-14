@@ -21,12 +21,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.filmy.app.data.api.dto.MovieSummaryDto
 import com.filmy.app.ui.HomeViewModel
 import com.filmy.app.ui.UiState
 import com.filmy.app.ui.component.ErrorState
 import com.filmy.app.ui.component.LoadingState
 import com.filmy.app.ui.component.MovieCard
+import com.filmy.app.ui.navigation.Screen
 import kotlinx.coroutines.delay
 
 private const val SECTION_NOW = "上映中"
@@ -37,7 +39,10 @@ private const val SECTION_TREND = "トレンド"
 private const val REFRESH_INTERVAL_MS = 30_000L
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
+fun HomeScreen(
+    navController: NavHostController,
+    viewModel: HomeViewModel = viewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // 画面が RESUMED の間だけ 30 秒ごとに再取得する。
@@ -61,6 +66,9 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
             now = state.data.now,
             coming = state.data.coming,
             trend = state.data.trend,
+            onMovieClick = { movie ->
+                navController.navigate(Screen.movieDetail(movie.id))
+            },
         )
     }
 }
@@ -70,20 +78,25 @@ private fun HomeContent(
     now: List<MovieSummaryDto>,
     coming: List<MovieSummaryDto>,
     trend: List<MovieSummaryDto>,
+    onMovieClick: (MovieSummaryDto) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(vertical = 8.dp),
     ) {
-        MovieSection(title = SECTION_NOW, movies = now)
-        MovieSection(title = SECTION_COMING, movies = coming)
-        MovieSection(title = SECTION_TREND, movies = trend)
+        MovieSection(title = SECTION_NOW, movies = now, onMovieClick = onMovieClick)
+        MovieSection(title = SECTION_COMING, movies = coming, onMovieClick = onMovieClick)
+        MovieSection(title = SECTION_TREND, movies = trend, onMovieClick = onMovieClick)
     }
 }
 
 @Composable
-private fun MovieSection(title: String, movies: List<MovieSummaryDto>) {
+private fun MovieSection(
+    title: String,
+    movies: List<MovieSummaryDto>,
+    onMovieClick: (MovieSummaryDto) -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = title,
@@ -103,8 +116,8 @@ private fun MovieSection(title: String, movies: List<MovieSummaryDto>) {
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(movies, key = { it.id }) { movie ->
-                    MovieCard(movie = movie)
+                items(movies) { movie ->
+                    MovieCard(movie = movie, onClick = { onMovieClick(movie) })
                 }
             }
         }

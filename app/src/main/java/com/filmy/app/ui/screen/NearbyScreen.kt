@@ -27,12 +27,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.filmy.app.data.api.dto.TheaterSummaryDto
 import com.filmy.app.ui.NearbyViewModel
 import com.filmy.app.ui.UiState
 import com.filmy.app.ui.component.ErrorState
 import com.filmy.app.ui.component.LoadingState
 import com.filmy.app.ui.component.TheaterCard
+import com.filmy.app.ui.navigation.Screen
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -50,7 +52,10 @@ private const val NEARBY_RADIUS_KM = 10.0
 private const val REFRESH_INTERVAL_MS = 30_000L
 
 @Composable
-fun NearbyScreen(viewModel: NearbyViewModel = viewModel()) {
+fun NearbyScreen(
+    navController: NavHostController,
+    viewModel: NearbyViewModel = viewModel(),
+) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -104,6 +109,13 @@ fun NearbyScreen(viewModel: NearbyViewModel = viewModel()) {
             latitude = state.data.latitude,
             longitude = state.data.longitude,
             theaters = state.data.theaters,
+            onTheaterClick = { theater ->
+                val prefecture = theater.prefecture
+                val areaId = theater.area_id
+                if (prefecture != null && areaId != null) {
+                    navController.navigate(Screen.theaterDetail(prefecture, areaId, theater.id))
+                }
+            },
         )
     }
 }
@@ -140,6 +152,7 @@ private fun NearbyContent(
     latitude: Double,
     longitude: Double,
     theaters: List<TheaterSummaryDto>,
+    onTheaterClick: (TheaterSummaryDto) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(
@@ -163,7 +176,7 @@ private fun NearbyContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(theaters, key = { it.id }) { theater ->
-                TheaterCard(theater = theater)
+                TheaterCard(theater = theater, onClick = { onTheaterClick(theater) })
             }
         }
     }
