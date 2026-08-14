@@ -51,6 +51,9 @@ import com.filmy.app.ui.component.ErrorState
 import com.filmy.app.ui.component.LoadingState
 import com.filmy.app.ui.component.PosterImage
 
+/** Filmarks の基底URL。theater.url は相対パスなのでここに連結して絶対URLを組み立てる。 */
+private const val FILMARKS_BASE_URL = "https://filmarks.com"
+
 /**
  * 劇場詳細画面。上映スケジュールと地図・公式サイトへのリンクを表示する。
  */
@@ -127,6 +130,14 @@ private fun isHttpUrl(url: String): Boolean {
     return scheme == "http" || scheme == "https"
 }
 
+/**
+ * theater.url（Filmarks の相対パス、例: `/theaters/tokyo/99/172`）を
+ * WebView が読み込める絶対URL（`https://filmarks.com` + url）に組み立てる。
+ * すでに絶対URL（http/https）の場合はそのまま返す。
+ */
+private fun toAbsoluteUrl(url: String): String =
+    if (isHttpUrl(url)) url else FILMARKS_BASE_URL + url
+
 @Composable
 private fun TheaterDetailContent(
     theater: TheaterDetailDto,
@@ -190,7 +201,7 @@ private fun TheaterDetailContent(
                     Text("地図を開く")
                 }
                 if (!theater.url.isNullOrBlank()) {
-                    OutlinedButton(onClick = { onNavigateWebView(theater.url) }) {
+                    OutlinedButton(onClick = { onNavigateWebView(toAbsoluteUrl(theater.url)) }) {
                         Icon(
                             imageVector = Icons.Filled.Language,
                             contentDescription = null,

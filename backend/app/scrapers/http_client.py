@@ -21,6 +21,8 @@ _STATUS_UNAVAILABLE = {401, 403, 429, 500, 502, 503, 504}
 # リクエスト間隔制御（モジュール/プロセス共有）。
 # インスタンスごとではなく、すべての FilmarksClient が同じロックとタイムスタンプを
 # 共有することで、連続した API コールでも Filmarks へのアクセス間隔が必ず守られる。
+# 間隔は起動時に settings.request_interval（既定5秒）から決定され、以降は固定。
+# コンストラクタ引数では変更できない（テストは monkeypatch で無効化する）。
 _throttle_lock = threading.Lock()
 _throttle_interval: float = settings.request_interval
 # 初回リクエストは待機しないよう「前回 = 現在 - interval」で初期化
@@ -53,18 +55,11 @@ class FilmarksClient:
         self,
         base_url: str | None = None,
         timeout: float | None = None,
-        interval: float | None = None,
         headers: dict[str, str] | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.base_url = (base_url or settings.filmarks_base_url).rstrip("/")
         self.timeout = timeout if timeout is not None else settings.request_timeout
-
-        # リクエスト間隔はモジュール共通で管理する。明示的に指定された場合は
-        # 共有スロットルの間隔を更新する（呼び出し側でページング時等に調整可能）。
-        if interval is not None:
-            global _throttle_interval
-            _throttle_interval = interval
 
         default_headers = {
             "Referer": f"{self.base_url}/",

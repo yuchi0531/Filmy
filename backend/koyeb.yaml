@@ -1,0 +1,31 @@
+# Koyeb デプロイ設定（Docker）
+#
+# 使用例:
+#   cd backend
+#   koyeb app create filmy
+#   koyeb service create filmy --docker . --port 8080
+#
+# 無料常駐インスタンス（shared-cpu-1x / 256MB）で 24/7 動作させる想定。
+# このファイルは計画・デプロイ手順の参照用であり、Koyeb CLI のコマンドで
+# 同様の設定が適用される（ポート 8080・Docker ビルド・ヘルスチェック）。
+apiVersion: v1
+kind: Service
+metadata:
+  name: filmy
+spec:
+  port: 8080
+  # 単一インスタンスの無料常駐（アプリサーバーはステートレス）
+  scalings:
+    min: 1
+    max: 1
+  instance_types:
+    - free
+  routes:
+    - path: /
+      port: 8080
+  health_checks:
+    - path: /health
+      interval: 30
+      timeout: 5
+      healthy_threshold: 1
+      unhealthy_threshold: 3

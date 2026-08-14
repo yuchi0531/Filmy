@@ -1,6 +1,16 @@
 # Filmy Backend
 
-Filmarks の映画情報を提供する FastAPI 製スクレイピングAPI。
+Filmarks の映画・劇場・上映スケジュール情報を提供する **FastAPI 製スクレイピングAPI**。
+
+- 実際の Filmarks にはアクセスするが、アクセス間隔をプロセス共有で5秒に制限し、
+  結果をインメモリキャッシュして負荷を軽減する。
+- スクレイピングは `app/scrapers/` に、レスポンスモデルは `app/models/` に分離。
+- 例外は `app/routers/common.py` の `run_scrape` で HTTP ステータスコードに変換。
+
+## 要件
+
+- Python 3.12+（pydantic v2 / pydantic-settings 対応）
+- 依存パッケージは `requirements.txt` に列挙
 
 ## 起動
 
@@ -8,105 +18,147 @@ Filmarks の映画情報を提供する FastAPI 製スクレイピングAPI。
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# 開発サーバー（REST API）
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-## エンドポイント
+ヘルスチェック:
 
-### ヘルスチェック
-
-- `GET /health` — `{"status": "ok"}`
-
-### 映画一覧（ページング対応）
-
-- `GET /api/movies/now` — 上映中の映画一覧
-- `GET /api/movies/coming` — 公開予定の映画一覧
-- `GET /api/movies/upcoming` — 今週公開の映画一覧
-- `GET /api/movies/trend` — トレンドの映画一覧
-
-すべて `?page=N`（1始まり、デフォルト1）でページング可能。レスポンスに
-`page` と `has_next`（次ページの有無）を含む。
-
-### 映画検索
-
-- `GET /api/search?q=ドラえもん` — 映画検索。`q` は1〜200文字。
-  `?page=N` でページング可能（レスポンスは一覧と共通形式）。
-
-### 映画詳細
-
-- `GET /api/movies/{movie_id}` — 映画詳細（movie_id は数字のみ）。
-
-### 劇場（theaters）
-
-- `GET /api/theaters/{prefecture}` — 都道府県のエリア一覧
-  （例: `/api/theaters/tokyo`。prefecture は Filmarks の slug 例: `tokyo`）
-- `GET /api/theaters/{prefecture}/{area_id}` — エリアの劇場一覧
-  （例: `/api/theaters/tokyo/99`。area_id は数字のみ）
-- `GET /api/theaters/{prefecture}/{area_id}/{theater_id}` — 劇場詳細＋上映スケジュール
-  （例: `/api/theaters/tokyo/99/16`。スケジュールは今日から7日分を映画別に集約）
-- `GET /api/theaters/nearby?lat=..&lng=..&radius=10` — 近隣劇場検索
-  （radius は1〜100km、デフォルト10。Filmarks の `/pia_theaters` JSON API の半径フィルタ・距離順を利用）
-
-注意: 劇場の緯度経度は Filmarks 側に存在しないため、詳細の `latitude`/`longitude` は
-`null`、近隣の `distance_km` は未設定。近隣は Filmarks サーバ側での距離順をそのまま返す。
-
-### レスポンス形式（一覧・検索共通）
-
-```json
-{
-  "query": null,
-  "heading": "上映中の最新映画おすすめ人気ランキング 459作品",
-  "results": [
-    {
-      "id": "119606",
-      "title": "...",
-      "rating": 3.8,
-      "poster_url": "https://...",
-      "release_date": "2026年07月31日",
-      "genres": ["ドラマ", "コメディ"],
-      "mark_count": 1200,
-      "clip_count": 45
-    }
-  ],
-  "total": 459,
-  "page": 1,
-  "has_next": true
-}
+```bash
+curl http://localhost:8000/health
+# => {"status":"ok"}
 ```
 
-### キャッシュ
+## APIエンドポイント
 
-- 一覧・検索はページごとにキャッシュ（`GET /api/movies/now?page=1` と
-  `?page=2` は別キャッシュ）。TTLは環境変数で変更可能（デフォルトは
-  一覧6時間 / 詳細24時間 / 検索1時間）。
+フルリファレンス（パラメータ・レスポンス例・エラーコード）は [API.md](API.md) を参照。
 
-- 劇場系は 都道府県/エリア一覧 24時間、劇場詳細＋スケジュール 1時間、
-  近隣検索 1時間のキャッシュ。
+| メソッド | パス | 説明 |
+| --- | --- | --- |
+| GET | `/health` | ヘルスチェック |
+| GET | `/api/movies/now` | 上映中の映画一覧 |
+| GET | `/api/movies/coming` | 公開予定の映画一覧 |
+| GET | `/api/movies/upcoming` | 今週公開の映画一覧 |
+| GET | `/api/movies/trend` | トレンドの映画一覧 |
+| GET | `/api/movies/{movie_id}` | 映画詳細（movie_id=数字のみ） |
+| GET | `/api/search?q=&page=` | 映画検索 |
+| GET | `/api/theaters/{prefecture}` | 都道府県のエリア一覧 |
+| GET | `/api/theaters/{prefecture}/{area_id}` | エリアの劇場一覧 |
+| GET | `/api/theaters/{prefecture}/{area_id}/{theater_id}` | 劇場詳細＋上映スケジュール |
+| GET | `/api/theaters/nearby?lat=&lng=&radius=` | 近隣劇場検索 |
+
+## キャッシュ戦略
+
+`cachetools.TTLCache` によるインメモリキャッシュ（`app/cache/__init__.py`、名前空間別・スレッドセーフ）。
+
+| 対象 | 名前空間 | デフォルトTTL | 環境変数 |
+| --- | --- | --- | --- |
+| 映画一覧（now/coming/upcoming/trend、ページ別） | `movie_list` | 6時間 (21600s) | `FILMY_CACHE_TTL_MOVIE_LIST` |
+| 映画詳細 | `movie_detail` | 24時間 (86400s) | `FILMY_CACHE_TTL_MOVIE_DETAIL` |
+| 劇場詳細＋スケジュール | `theater_detail` | 1時間 (3600s) | スケジュール用 TTL |
+| 都道府県・エリア一覧 | `theater_pref` / `theater_area` | 24時間 (86400s) | `FILMY_CACHE_TTL_THEATER` |
+| 近隣検索 | `theater_nearby` | 1時間 (3600s) | スケジュール用 TTL |
+| 検索結果（`q:page` 別） | `search` | 1時間 (3600s) | `FILMY_CACHE_TTL_SEARCH` |
+
+- 一覧・検索は **ページごとにキャッシュキーを分離**（`now:1` と `now:2` は別キャッシュ）。
+- キャッシュの最大エントリ数は名前空間あたり 256（`CACHE_MAXSIZE`）。
+
+### スクレイピング間隔（スロットル）
+
+- `FilmarksClient` は**プロセス共有されたロック＋タイムスタンプ**でアクセス間隔を制御。
+  全インスタンスが同じ間隔（デフォルト5秒）を守る。
+- テストでは `FILMY_REQUEST_INTERVAL=0` に設定して高速化する（`tests/conftest.py`）。
+
+## テスト実行方法
+
+121件のテスト（単体99件 + 結合22件）を実行:
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m pytest tests/ -v
+```
+
+テストは **実ネットワークに一切アクセスしません**。
+
+- `tests/` — 単体テスト（モデル・パーサー・スクレイパー・HTTPクライアント・キャッシュ・ルーター）
+- `tests/test_integration.py` — **結合テスト**。全APIエンドポイントを
+  `TestClient` 経由で一気通貫に検証（FastAPI → ルーター → スクレイパー → パーサー）。
+  ネットワーク層だけを `tests/fake_client.py` の `FakeFilmarksClient`（モッククライアント）に差し替え。
+- `tests/conftest.py` — 共通フィクスチャ（ベースURLを到達不能ドメイン化、スロットル0、キャッシュクリア）
 
 ## 構造
 
 ```
 app/
-├── main.py        # FastAPIインスタンス、CORS、ルート登録
-├── config.py      # pydantic-settings による設定（FILMY_ プレフィックス）
-├── routers/       # APIルーター（movies / theaters / search / common）
-├── scrapers/      # Filmarks スクレイピング実装
-│   ├── http_client.py  # FilmarksClient（プロセス共有のリクエスト間隔制御）
-│   ├── parser.py       # エラーページ検出・安全な数値変換などの共通ヘルパー
-│   ├── list_scraper.py # 一覧スクレイパー（検索スクレイパーと共有のカードパーサ）
+├── main.py            # FastAPIインスタンス、CORS（全オリジン）、ルート登録
+├── config.py          # pydantic-settings（FILMY_ プレフィックス）
+├── routers/
+│   ├── common.py      # run_scrape（スクレイピング例外 → HTTP 変換）
+│   ├── movies.py      # /api/movies/*
+│   ├── search.py      # /api/search
+│   └── theaters.py    # /api/theaters/*
+├── scrapers/
+│   ├── http_client.py # FilmarksClient（プロセス共有スロットル、例外変換）
+│   ├── parser.py      # エラーページ検出・安全な数値変換
+│   ├── base.py        # BaseScraper（HTML取得→パース→エラー検出）
+│   ├── list_scraper.py
 │   ├── search_scraper.py
 │   ├── movie_scraper.py
-│   ├── theater_scraper.py # 劇場リスト/詳細+スケジュールスクレイパー
-│   ├── geo.py             # 距離計算ユーティリティ（haversine）
-│   └── base.py / exceptions.py
-├── models/        # Pydantic レスポンスモデル
-└── cache/         # cachetools による名前空間別 TTL キャッシュ
+│   ├── theater_scraper.py
+│   └── exceptions.py  # FilmarksError系
+├── models/            # Pydantic レスポンスモデル
+└── cache/             # CacheManager（TTLCache、名前空間別）
 ```
 
-## デプロイ
+## 環境変数
 
-- **Docker**: `python:3.12-slim` ベース、ポート 8080
-- **Fly.io**: `fly.toml`（shared-cpu-1x / 256MB、ヘルスチェック `GET /health`）
+設定は `app/config.py` の `Settings` に定義。環境変数（`FILMY_` プレフィックス）で上書き可能。
+
+| 環境変数 | デフォルト | 説明 |
+| --- | --- | --- |
+| `FILMY_FILMARKS_BASE_URL` | `https://filmarks.com` | Filmarks のベースURL |
+| `FILMY_REQUEST_TIMEOUT` | `15` | HTTPリクエストのタイムアウト（秒） |
+| `FILMY_REQUEST_INTERVAL` | `5` | スクレイピング間隔（秒・プロセス共有） |
+| `FILMY_CACHE_TTL_MOVIE_LIST` | `21600` | 映画一覧キャッシュTTL（6時間） |
+| `FILMY_CACHE_TTL_MOVIE_DETAIL` | `86400` | 映画詳細キャッシュTTL（24時間） |
+| `FILMY_CACHE_TTL_SCHEDULE` | `3600` | スケジュールキャッシュTTL（1時間） |
+| `FILMY_CACHE_TTL_THEATER` | `86400` | 劇場情報キャッシュTTL（24時間） |
+| `FILMY_CACHE_TTL_SEARCH` | `3600` | 検索キャッシュTTL（1時間） |
+| `FILMY_USER_AGENT` | ブラウザUA | スクレイピング時のUser-Agent |
+
+## Koyeb デプロイ
+
+Docker コンテナとして Koyeb（無料常駐インスタンス）にデプロイします。
+
+### ローカルで Docker イメージを確認
+
+```bash
+cd backend
+docker build -t filmy-backend .
+docker run -p 8080:8080 filmy-backend
+curl http://localhost:8080/health
+# => {"status":"ok"}
+```
+
+### Koyeb CLI でデプロイ
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/koyeb/cli/master/install.sh | sh
+koyeb login
+
+cd backend
+koyeb app create filmy
+koyeb service create filmy --docker . --port 8080
+```
+
+- ポート `8080`（Dockerfile の `EXPOSE 8080`、`CMD uvicorn ... --port 8080`）
+- ヘルスチェック: `GET /health`（Dockerfile の `HEALTHCHECK` と Koyeb の両方で確認）
+- 環境変数: `koyeb secret create FILMY_XXX=...` で設定し、サービスに割り当てる
+- デプロイ設定の参考: [`koyeb.yaml`](koyeb.yaml)（ポート 8080・無料常駐インスタンス・/health チェック）
+
+参考: [フロントの README（ルート）](../README.md)
 
 ## 免責事項
 

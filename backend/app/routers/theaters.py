@@ -87,9 +87,14 @@ def _area_list(prefecture: str, area_id: str) -> TheaterListResponse:
     return result
 
 
-def _theater_detail(url_path: str, theater_id: str) -> TheaterDetail:
-    """劇場詳細＋スケジュールを返す（キャッシュ1時間）。"""
-    cached = cache_manager.get(_CACHE_DETAIL, theater_id)
+def _theater_detail(url_path: str, prefecture: str, area_id: str, theater_id: str) -> TheaterDetail:
+    """劇場詳細＋スケジュールを返す（キャッシュ1時間）。
+
+    キャッシュキーは prefecture/area_id/theater_id を含めることで、同一 theater_id を
+    別の prefecture/area 経路から参照した場合のキャッシュ衝突を防ぐ。
+    """
+    key = f"{prefecture}:{area_id}:{theater_id}"
+    cached = cache_manager.get(_CACHE_DETAIL, key)
     if cached is not None:
         return cached
 
@@ -98,7 +103,7 @@ def _theater_detail(url_path: str, theater_id: str) -> TheaterDetail:
         return scraper.fetch_theater(url_path)
 
     result = run_scrape(scrape)
-    cache_manager.set(_CACHE_DETAIL, theater_id, result, settings.cache_ttl_schedule)
+    cache_manager.set(_CACHE_DETAIL, key, result, settings.cache_ttl_schedule)
     return result
 
 
@@ -201,4 +206,4 @@ def get_theater(
 ) -> TheaterDetail:
     """劇場詳細＋上映スケジュール。"""
     url_path = f"/theaters/{prefecture}/{area_id}/{theater_id}"
-    return _theater_detail(url_path, theater_id)
+    return _theater_detail(url_path, prefecture, area_id, theater_id)

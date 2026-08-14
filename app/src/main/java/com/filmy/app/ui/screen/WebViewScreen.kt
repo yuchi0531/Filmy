@@ -86,12 +86,16 @@ fun WebViewScreen(
                     request: WebResourceRequest,
                 ): Boolean = !isHttpUrl(request.url.toString())
 
+                // サブリソース（画像・広告等）の失敗ではエラー表示しない。
+                // メインフレームの失敗のみエラー状態にする。
                 override fun onReceivedError(
                     view: WebView,
                     request: WebResourceRequest,
                     error: WebResourceError,
                 ) {
-                    loadError = error.description?.toString() ?: "ページを読み込めませんでした"
+                    if (request.isForMainFrame) {
+                        loadError = error.description?.toString() ?: "ページを読み込めませんでした"
+                    }
                 }
 
                 override fun onReceivedHttpError(
@@ -99,7 +103,9 @@ fun WebViewScreen(
                     request: WebResourceRequest,
                     response: WebResourceResponse,
                 ) {
-                    loadError = "HTTP ${response.statusCode} エラー"
+                    if (request.isForMainFrame) {
+                        loadError = "HTTP ${response.statusCode} エラー"
+                    }
                 }
             }
         }

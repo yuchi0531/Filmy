@@ -18,12 +18,18 @@ android {
     }
 
     buildTypes {
+        debug {
+            // エミュレータからホストマシンの localhost（10.0.2.2）
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/\"")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Koyeb のデプロイURL（仮）
+            buildConfigField("String", "API_BASE_URL", "\"https://filmy.koyeb.app/\"")
         }
     }
 
@@ -38,6 +44,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

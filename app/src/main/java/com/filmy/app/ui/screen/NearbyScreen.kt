@@ -3,6 +3,7 @@ package com.filmy.app.ui.screen
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.location.Location
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -110,11 +111,15 @@ fun NearbyScreen(
             longitude = state.data.longitude,
             theaters = state.data.theaters,
             onTheaterClick = { theater ->
-                val prefecture = theater.prefecture
-                val areaId = theater.area_id
-                if (prefecture != null && areaId != null) {
+                // theater.url（例: /theaters/tokyo/99/172）のパス部分から正しい
+                // prefecture と area_id を抽出して遷移しないと、バックエンドの
+                // prefecture "近隣" 固定値・area_id 起因で必ず404になる。
+                val path = extractTheaterPath(theater.url)
+                if (path != null) {
+                    val (prefecture, areaId) = path
                     navController.navigate(Screen.theaterDetail(prefecture, areaId, theater.id))
                 }
+                // 抽出できない（url が無い・形式不正）場合は遷移しない（ガード）。
             },
         )
     }
@@ -203,3 +208,17 @@ private suspend fun getCurrentLocation(context: Context): Location? =
     } catch (e: Exception) {
         null
     }
+
+/**
+ * 劇場の相対URL（例: `/theaters/tokyo/99/172`）から `(prefecture, area_id)` を抽出する。
+ * 形式が合致しない場合は null を返す（遷移ガード用）。
+ */
+private fun extractTheaterPath(url: String?): Pair<String, String>? {
+    if (url.isNullOrBlank()) return null
+    val segments = Uri.parse(url).pathSegments
+    // pathSegments は先頭の "/" を除いた「/theaters/tokyo/99/172」→ [theaters, tokyo, 99, 172]
+    if (segments.size >= 4 && segments[0] == "theaters") {
+        return segments[1] to segments[2]
+    }
+    return null
+}

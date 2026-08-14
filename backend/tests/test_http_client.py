@@ -26,12 +26,10 @@ from app.scrapers.http_client import FilmarksClient
 _BASE = "https://filmarks.example.test"
 
 
-def _client(handler, interval: float = 0.0) -> FilmarksClient:
+def _client(handler) -> FilmarksClient:
     """MockTransport を使った FilmarksClient を返す（実ネットワーク不使用）。"""
     transport = httpx.MockTransport(handler)
-    return FilmarksClient(
-        base_url=_BASE, transport=transport, interval=interval
-    )
+    return FilmarksClient(base_url=_BASE, transport=transport)
 
 
 def _status_handler(status: int):
@@ -112,8 +110,12 @@ def test_timeout_maps_to_unavailable():
 # --- スロットル（リクエスト間隔） ---
 
 
-def test_throttle_interval_respected():
-    """連続リクエストが設定した間隔以上あけて実行されること。"""
+def test_throttle_interval_respected(monkeypatch):
+    """連続リクエストが設定した間隔以上あけて実行されること。
+
+    _throttle_interval はモジュール起動時（既定5秒）から固定で、コンストラクタでは
+    変更しない。ここではテスト専用に monkeypatch で小さな間隔に差し替えて検証する。
+    """
     calls: list[str] = []
 
     def handler(request):
@@ -121,7 +123,11 @@ def test_throttle_interval_respected():
         return httpx.Response(200, text="ok", request=request)
 
     interval = 0.05
-    client = _client(handler, interval=interval)
+    # グローバル間隔をテスト内だけで差し替える（teardown で元の値に戻る）
+    monkeypatch.setattr(
+        "app.scrapers.http_client._throttle_interval", interval
+    )
+    client = _client(handler)
     try:
         start = time.monotonic()
         client.get_html("/a")
