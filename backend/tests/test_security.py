@@ -1,6 +1,7 @@
 """認証（fail-closed）・レート制限（XFFスプーフィング対策・メモリ掃除）のテスト。"""
 
 import time
+from collections import deque
 
 import pytest
 from fastapi import HTTPException
@@ -114,7 +115,7 @@ def test_rate_limit_removes_stale_ip_keys(monkeypatch):
     # 古い記録を直接注入して、掃除対象のIPを作る
     stale = time.monotonic() - 120.0
     with rate_limit._lock:
-        rate_limit._requests["old-ip"] = [stale]
+        rate_limit._requests["old-ip"] = deque([stale])
 
     req = _make_request("new-ip")
     rate_limit.rate_limit(req)

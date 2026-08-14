@@ -28,10 +28,16 @@ def _test_settings(monkeypatch) -> None:
     monkeypatch.setattr(settings, "filmarks_base_url", "https://filmarks.example.test")
     monkeypatch.setattr(settings, "request_timeout", 1.0)
     monkeypatch.setattr(settings, "request_interval", 0.0)
+    # テストは development 環境として実行する（production の fail-closed を避ける）。
+    # settings.environment のデフォルトは production に変更されたため、
+    # ここで明示的に development へ monkeypatch して既存テスト互換を保つ。
+    monkeypatch.setattr(settings, "environment", "development")
     # プロセス共有スロットル（モジュールレベルのグローバル）も待機させない
     import app.scrapers.http_client as http_client
 
     monkeypatch.setattr(http_client, "_throttle_interval", 0.0)
+    # get_html_batch 内のバースト緩和スタガーも待機させない
+    monkeypatch.setattr(http_client, "_BATCH_STAGGER_SECONDS", 0.0)
 
 
 @pytest.fixture(autouse=True)
@@ -83,6 +89,9 @@ def _isolate_coord_cache_and_geocode(tmp_path, monkeypatch) -> None:
         CoordCache(str(tmp_path / "theater_coords.db")),
     )
     monkeypatch.setattr("app.geocode.geocode_address", lambda address: None)
+    # バックグラウンド座標補完の遅延を 0 にして、テストでスレッド完了を
+    # 即座に待てるようにする（本番では 5 秒の遅延でスロットル競合を緩和）。
+    monkeypatch.setattr(theaters_mod, "_BACKGROUND_RESOLUTION_DELAY", 0.0)
     # 座標補完の in-flight 集合（モジュールレベルのグローバル）をテスト間でクリアし、
     # デーモンスレッドの finally クリーンアップと競合しても状態が漏れないようにする。
     with theaters_mod._in_flight_lock:

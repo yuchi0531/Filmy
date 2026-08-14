@@ -15,6 +15,7 @@
 import json
 import logging
 import threading
+import time
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
@@ -53,6 +54,12 @@ _CACHE_PREF = "theater_pref"
 _CACHE_AREA = "theater_area"
 _CACHE_DETAIL = "theater_detail"
 _CACHE_NEARBY = "theater_nearby"
+# 座標未解決時の短TTL（30秒）キャッシュ用の別名前空間。
+# CacheManager は同一名前空間で TTL が変わると TTLCache を作り直して全エントリを
+# 破棄するため、正規キャッシュ（1時間）と同じ `theater_nearby` を使うと、短TTLと
+# 正規TTLが交互に発生して互いの全エントリをフラッシュし合う（C1）。名前空間を
+# 分離することで、短TTLキャッシュと正規キャッシュが干渉しないようにする。
+_CACHE_NEARBY_PENDING = "theater_nearby_pending"
 
 # 劇場座標の永続キャッシュ（SQLite）のモジュールレベルシングルトン。
 # テストでは app.routers.theaters.coord_cache を monkeypatch して差し替える。
@@ -70,6 +77,12 @@ _in_flight: set[str] = set()
 # 補完完了までの短期間キャッシュで /pia_theaters の再取得を抑止しつつ、
 # 補完完了後は正規キャッシュ（cache_ttl_schedule）へ自然に移行させる。
 _NEARBY_PENDING_TTL = 30.0
+
+# バックグラウンド座標補完の開始前遅延（秒）。
+# メインの近隣検索直後に補完を開始すると、プロセス共有の
+# _throttle_lock/_last_request_at を奪い合って直後の API が不要にブロックする。
+# テストでは conftest が 0.0 に差し替えて実行を高速化する。
+_BACKGROUND_RESOLUTION_DELAY = 5.0
 
 
 def _detail_path_from_url(url: str) -> str | None:
@@ -171,6 +184,15 @@ def _schedule_coord_resolution(theaters: list[TheaterSummary]) -> None:
 
     def _task() -> None:
         try:
+            # メインリクエストとのスロットル競合を避けるため遅延実行する。
+            # 直後にバックグラウンド補完が始まると、プロセス共有の
+            # `_throttle_lock/_last_request_at` をメインの近隣検索と奪い合い、
+            # 補完完了時に `_last_request_at` を上書きして直後の API が
+            # 不要に 5 秒ブロックする。ここで少し待つことで競合を緩和する。
+            # 遅延 0 の場合は time.sleep(0) の GIL 解放によるタイミング変化を
+            # 避けるため sleep 自体を呼ばない。
+            if _BACKGROUND_RESOLUTION_DELAY > 0:
+                time.sleep(_BACKGROUND_RESOLUTION_DELAY)
             with FilmarksClient() as client:
                 _resolve_coords(client, to_resolve)
         except Exception:
@@ -261,7 +283,12 @@ def _nearby(lat: float, lng: float, radius_km: float) -> NearbyResponse:
     （座標が外部に公開されていないため）。distance_km は未設定とする。
     """
     key = f"{lat:.5f}:{lng:.5f}:{radius_km}"
+    # 正規キャッシュ（1時間）を先に確認し、無ければ短TTL（座標未解決中）の
+    # キャッシュも確認する。短TTLは別名前空間のため、正規キャッシュと互いに
+    # フラッシュし合うことはない（C1）。
     cached = cache_manager.get(_CACHE_NEARBY, key)
+    if cached is None:
+        cached = cache_manager.get(_CACHE_NEARBY_PENDING, key)
     if cached is not None:
         return cached
 
@@ -325,8 +352,10 @@ def _nearby(lat: float, lng: float, radius_km: float) -> NearbyResponse:
         _schedule_coord_resolution([t.model_copy() for t in pending])
         # 座標解決済みの劇場が1件でもあれば、短い TTL（30秒）でキャッシュして
         # 補完完了までの間の /pia_theaters 再取得を抑止する（M6）。
+        # 短TTLは別名前空間（_CACHE_NEARBY_PENDING）を使う。同一名前空間で TTL が
+        # 変わると TTLCache が作り直されて正規キャッシュもフラッシュされるため（C1）。
         if len(result.theaters) > len(pending):
-            cache_manager.set(_CACHE_NEARBY, key, result, _NEARBY_PENDING_TTL)
+            cache_manager.set(_CACHE_NEARBY_PENDING, key, result, _NEARBY_PENDING_TTL)
     else:
         # 全劇場の座標が揃っている場合のみ正規キャッシュ（1時間）する
         cache_manager.set(_CACHE_NEARBY, key, result, settings.cache_ttl_schedule)

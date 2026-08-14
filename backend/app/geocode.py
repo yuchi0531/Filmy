@@ -63,6 +63,7 @@ def geocode_addresses(addresses: list[str]) -> list[tuple[float, float] | None]:
     if not addresses:
         return []
 
-    max_workers = min(len(addresses), 10)
+    # 大量住所でもスレッドを枯渇させないよう、同時実行ワーカーを最大3に固定する。
+    max_workers = min(len(addresses), 3)
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         return list(executor.map(geocode_address, addresses))

@@ -28,8 +28,11 @@ class Settings(BaseSettings):
     )
 
     # 実行環境（development / production）。
-    # production ではAPIキー未設定（api_key=""）を認めず起動時に失敗（fail-closed）させる。
-    environment: str = "development"
+    # 既定は production。FILMY_ENVIRONMENT 未設定のまま本番デプロイしても
+    # fail-closed が発動するよう、デフォルトを production にしている。
+    # ローカル開発・テストでは FILMY_ENVIRONMENT=development を明示するか、
+    # tests/conftest.py の autouse フィクスチャで development に monkeypatch する。
+    environment: str = "production"
 
     # クライアント認証用のAPIキー。
     # - development では空文字なら認証をスキップ（ローカル開発・既存テスト互換）。

@@ -29,6 +29,11 @@ _throttle_interval: float = settings.request_interval
 # 初回リクエストは待機しないよう「前回 = 現在 - interval」で初期化
 _last_request_at: float = time.monotonic() - settings.request_interval
 
+# get_html_batch 内の各ワーカー開始前のスタガー間隔（秒）。
+# バーストを緩和するため idx 番目のワーカーは idx * この値 だけ待ってから投げる。
+# テストでは conftest が 0.0 に差し替えて実行を高速化する。
+_BATCH_STAGGER_SECONDS = 0.3
+
 
 def _wait_interval() -> None:
     """前回の（プロセス共有）リクエストから一定間隔経過するまで待機する。
@@ -107,7 +112,10 @@ class FilmarksClient:
             return []
         _wait_interval()  # バッチ全体の前に1回スロットル
 
-        def _fetch_one(path: str) -> str | None:
+        def _fetch_one(idx_path: tuple[int, str]) -> str | None:
+            idx, path = idx_path
+            # 実行開始前に軽い間隔（0.3秒ずつ）を挟み、同時バーストを緩和する。
+            time.sleep(_BATCH_STAGGER_SECONDS * idx)
             url = urljoin(f"{self.base_url}/", path)
             try:
                 response = self._client.get(url)
@@ -119,12 +127,12 @@ class FilmarksClient:
                 return None
             return response.text
 
-        # Filmarks への同時接続数を制限し、バーストアクセス（過剰負荷）を防ぐ。
-        # paths の件数分だけ並列に投げると、5秒スロットルの意図が骨抜きになるため
-        # 同時実行ワーカー数を最大5に制限する。
-        max_workers = min(len(paths), 5)
+        # Filmarks への同時接続を最小限に抑える。
+        # paths の件数分だけ並列に投げると、5秒スロットルの意図（バースト回避）が
+        # 骨抜きになるため、同時実行ワーカー数を最大3に制限する。
+        max_workers = min(len(paths), 3)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            results = list(executor.map(_fetch_one, paths))
+            results = list(executor.map(_fetch_one, enumerate(paths)))
 
         global _last_request_at
         with _throttle_lock:

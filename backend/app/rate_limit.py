@@ -2,15 +2,17 @@
 
 import threading
 import time
+from collections import deque
 
 from fastapi import HTTPException, Request
 
 from app.config import settings
 
-# IPごとのアクセス時刻リスト（モジュールレベルのグローバル状態）。
-# キーはクライアントIP、値は直近60秒間のアクセス時刻（time.monotonic()）。
-# 60秒より古い記録を捨ててリストが空になったらキーごと削除し、メモリ肥大化を防ぐ。
-_requests: dict[str, list[float]] = {}
+# IPごとのアクセス時刻（モジュールレベルのグローバル状態）。
+# キーはクライアントIP、値は直近60秒間のアクセス時刻（time.monotonic()）の deque。
+# 60秒より古い記録を先頭から popleft() で捨て、空になったらキーごと削除して
+# メモリ肥大化を防ぐ（list の pop(0) は O(N) のため deque で O(1) にする）。
+_requests: dict[str, deque[float]] = {}
 _lock = threading.Lock()
 
 
@@ -19,7 +21,7 @@ def _trusted_proxies() -> set[str]:
     return {ip.strip() for ip in settings.trusted_proxies.split(",") if ip.strip()}
 
 
-def _client_ip(request: Request) -> str | None:
+def _client_ip(request: Request) -> str:
     """リクエスト元のクライアントIPを返す。
 
     X-Forwarded-For は無条件には信頼しない。リクエスト元（request.client.host）
@@ -32,9 +34,11 @@ def _client_ip(request: Request) -> str | None:
       左端が元クライアント、以降が経由プロキシ。右端から走査して信頼プロキシを
       スキップし、最初に現れた非信頼IPをクライアントとみなす。
       （信頼プロキシが1つなら、これは「右から2番目＝クライアント」に一致する。）
+    - ``request.client`` が None（テストや特殊な transport）の場合は、制限を
+      スキップしてしまうのを防ぐため固定キー ``"unknown"`` を返してカウントする。
     """
     if request.client is None:
-        return None
+        return "unknown"
 
     direct_ip = request.client.host
     trusted = _trusted_proxies()
@@ -70,27 +74,25 @@ def rate_limit(request: Request) -> None:
         return
 
     ip = _client_ip(request)
-    if ip is None:
-        return
 
     now = time.monotonic()
     cutoff = now - 60.0
 
     with _lock:
-        # 全IPの古い記録を破棄し、リストが空になったキーは削除する。
+        # 全IPの古い記録を破棄し、deque が空になったキーは削除する。
         # これにより、以後アクセスのないIPのキーが辞書に残り続けて
         # メモリが単調増加する（無制限肥大化）ことを防ぐ。
         for key in list(_requests.keys()):
             records = _requests[key]
             # 記録は単調増加で追加されるため、先頭から古いものを捨てる
             while records and records[0] < cutoff:
-                records.pop(0)
+                records.popleft()
             if not records:
                 del _requests[key]
 
         records = _requests.get(ip)
         if records is None:
-            records = []
+            records = deque()
             _requests[ip] = records
         if len(records) >= limit:
             raise HTTPException(status_code=429, detail="too many requests")

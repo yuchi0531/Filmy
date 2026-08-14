@@ -33,23 +33,33 @@ class CoordCache:
 
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
-        self._lock = threading.Lock()
+        # RLock: get/set が _lock を保持したまま _ensure_initialized を呼ぶため、
+        # _ensure_initialized 側でも再入可能にロックを取得できるようにする。
+        self._lock = threading.RLock()
         self._initialized = False
 
     def _ensure_initialized(self) -> None:
-        """DBファイルとテーブルを初回アクセス時に生成する。"""
+        """DBファイルとテーブルを初回アクセス時に生成する。
+
+        二重チェックロッキングで TOCTOU を防ぐ。``self._initialized`` のチェックを
+        ロック外で行うだけでは、複数スレッドが同時に DB/テーブルを生成して
+        ``database is locked`` になり得るため、ロック内で再チェックしてから初期化する。
+        """
         if self._initialized:
             return
-        parent = os.path.dirname(self._db_path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        conn = sqlite3.connect(self._db_path)
-        try:
-            conn.execute(_CREATE_TABLE_SQL)
-            conn.commit()
-        finally:
-            conn.close()
-        self._initialized = True
+        with self._lock:
+            if self._initialized:
+                return
+            parent = os.path.dirname(self._db_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            conn = sqlite3.connect(self._db_path)
+            try:
+                conn.execute(_CREATE_TABLE_SQL)
+                conn.commit()
+            finally:
+                conn.close()
+            self._initialized = True
 
     def _connect(self) -> sqlite3.Connection:
         # check_same_thread=False により、ロックで直列化された
