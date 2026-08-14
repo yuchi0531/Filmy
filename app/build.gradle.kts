@@ -19,11 +19,11 @@ android {
 
     buildTypes {
         debug {
-            // 実機では adb reverse tcp:8000 tcp:8000 でホストの localhost へ転送。
-            // 127.0.0.1 はデバイス自身の localhost を指し、adb reverse によりホストへ転送される。
-            buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8000/\"")
-            // API キー認証用。Koyeb の `FILMY_API_KEY` と同じ値を設定すること。
-            buildConfigField("String", "API_KEY", "\"CHANGE_ME\"")
+            // 自宅サーバ（192.168.100.109）に直接接続。実機から LAN 経由でアクセス。
+            // （adb reverse を使う場合の localhost 指定は設定画面の「サーバーURL」で切り替え可）
+            buildConfigField("String", "API_BASE_URL", "\"http://192.168.100.109:8000/\"")
+            // API キー認証用。自宅サーバの `FILMY_API_KEY` と同じ値。
+            buildConfigField("String", "API_KEY", "\"filmy-dev-key-2026\"")
         }
         release {
             isMinifyEnabled = true
