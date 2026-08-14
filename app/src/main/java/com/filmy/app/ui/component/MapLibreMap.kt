@@ -13,6 +13,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import org.maplibre.android.MapLibre
+import org.maplibre.android.WellKnownTileServer
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -70,7 +72,14 @@ fun MapLibreMap(
     val lifecycleOwner = LocalLifecycleOwner.current
     val density = context.resources.displayMetrics.density
 
-    val mapView = remember { MapView(context) }
+    // MapLibre 13.x では MapView 生成前に getInstance による初期化が必須。
+    // OpenFreeMap はカスタムタイルサーバのため APIキー不要（空文字）。
+    val mapView = remember {
+        if (!MapLibre.hasInstance()) {
+            MapLibre.getInstance(context, "", WellKnownTileServer.MapLibre)
+        }
+        MapView(context)
+    }
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }
 
