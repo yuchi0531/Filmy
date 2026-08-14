@@ -12,10 +12,16 @@
   距離順）を利用して近隣劇場を返す。
 """
 
+import json
+from urllib.parse import urlparse
+
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, Path, Query
 
+from app import geocode
 from app.cache import cache_manager
 from app.config import settings
+from app.coord_cache import CoordCache
 from app.models.theater import (
     AreaListResponse,
     AreaSummary,
@@ -26,7 +32,11 @@ from app.models.theater import (
 )
 from app.routers.common import run_scrape
 from app.scrapers.http_client import FilmarksClient
-from app.scrapers.theater_scraper import TheaterDetailScraper, TheaterListScraper
+from app.scrapers.theater_scraper import (
+    TheaterDetailScraper,
+    TheaterListScraper,
+    _THEATER_URL_RE,
+)
 
 router = APIRouter(prefix="/api/theaters", tags=["theaters"])
 
@@ -35,6 +45,77 @@ _CACHE_PREF = "theater_pref"
 _CACHE_AREA = "theater_area"
 _CACHE_DETAIL = "theater_detail"
 _CACHE_NEARBY = "theater_nearby"
+
+# 劇場座標の永続キャッシュ（SQLite）のモジュールレベルシングルトン。
+# テストでは app.routers.theaters.coord_cache を monkeypatch して差し替える。
+coord_cache = CoordCache(settings.coord_cache_path)
+
+# 詳細ページの住所抽出セレクタ（Filmarks 実HTML構造）
+_ADDRESS_SELECTOR = "div.p-theater-movies-info__address"
+
+
+def _detail_path_from_url(url: str) -> str | None:
+    """劇場URLから詳細ページのパス（``/theaters/{pref}/{area}/{id}``）を取り出す。
+
+    - 相対パス（``/theaters/...`` で始まる）はそのまま返す。
+    - 絶対URL（``https://filmarks.com/theaters/...``）は ``_THEATER_URL_RE`` の
+      マッチ、またはURLパースの path から取り出す。
+    """
+    if url.startswith("/theaters/"):
+        return url
+    m = _THEATER_URL_RE.search(url)
+    if m:
+        return m.group(0)
+    parsed = urlparse(url)
+    if parsed.path.startswith("/theaters/"):
+        return parsed.path
+    return None
+
+
+def _extract_address(html: str) -> str | None:
+    """劇場詳細ページの HTML から住所テキストを抽出する。"""
+    soup = BeautifulSoup(html, "lxml")
+    el = soup.select_one(_ADDRESS_SELECTOR)
+    if el is None:
+        return None
+    return el.get_text(" ", strip=True) or None
+
+
+def _resolve_coords(client: FilmarksClient, theaters: list[TheaterSummary]) -> None:
+    """近隣検索結果の各劇場に座標（緯度・経度）を補完する。
+
+    1. 座標キャッシュ（SQLite）に座標があればそれを設定する。
+    2. キャッシュに無い劇場は、詳細ページを ``get_html_batch`` で並列取得して
+       住所を抽出 → ``geocode_address`` でジオコーディング → キャッシュに保存する。
+    3. 取得できない場合は ``latitude``/``longitude`` は None のままとする。
+    """
+    missing: list[tuple[TheaterSummary, str]] = []
+    for t in theaters:
+        coord = coord_cache.get(t.id)
+        if coord is not None:
+            t.latitude, t.longitude = coord
+        elif t.url:
+            path = _detail_path_from_url(t.url)
+            if path:
+                missing.append((t, path))
+
+    if not missing:
+        return
+
+    htmls = client.get_html_batch([path for _, path in missing])
+    for (t, _path), html in zip(missing, htmls):
+        if html is None:
+            continue
+        address = _extract_address(html)
+        if not address:
+            continue
+        coord = geocode.geocode_address(address)
+        if coord is None:
+            continue
+        latitude, longitude = coord
+        t.latitude = latitude
+        t.longitude = longitude
+        coord_cache.set(t.id, latitude, longitude, address)
 
 
 def _prefecture_list(prefecture: str) -> AreaListResponse:
@@ -123,10 +204,6 @@ def _nearby(lat: float, lng: float, radius_km: float) -> NearbyResponse:
             f"/pia_theaters?latitude={lat}&longitude={lng}"
             f"&radius={radius_km}"
         )
-        import json
-
-        from app.scrapers.theater_scraper import _THEATER_URL_RE
-
         raw = client.get_html(path)
         data = json.loads(raw)
         theaters: list[TheaterSummary] = []
@@ -150,6 +227,8 @@ def _nearby(lat: float, lng: float, radius_km: float) -> NearbyResponse:
                     url=str(url) if url else None,
                 )
             )
+        # 座標（緯度・経度）をキャッシュ or ジオコーディングで補完する
+        _resolve_coords(client, theaters)
         return NearbyResponse(
             latitude=lat,
             longitude=lng,

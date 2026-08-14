@@ -25,13 +25,16 @@ class TheaterSummary(BaseModel):
     area_id: str | None = None
     url: str | None = None  # Filmarks の劇場URL（/theaters/{pref}/{area}/{id}）
     distance_km: float | None = None  # 近隣検索時のみ
+    latitude: float | None = None  # 国土地理院APIで住所から解決（未解決なら None）
+    longitude: float | None = None  # 同上
 
 
 class TheaterDetail(TheaterSummary):
-    """劇場の詳細（スケジュール含む）。TheaterSummary を継承する。"""
+    """劇場の詳細（スケジュール含む）。TheaterSummary を継承する。
 
-    latitude: float | None = None
-    longitude: float | None = None
+    ``latitude``/``longitude`` は TheaterSummary から継承する。
+    """
+
     map_url: str | None = None
     movies: list[MovieSchedule] = Field(default_factory=list)
 

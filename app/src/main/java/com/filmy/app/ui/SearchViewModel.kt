@@ -2,7 +2,6 @@ package com.filmy.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.dto.MovieListResponseDto
 import com.filmy.app.data.repository.MovieRepository
 import kotlinx.coroutines.Job
@@ -14,7 +13,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class SearchViewModel : ViewModel() {
 
-    private val repository = MovieRepository(ApiClient.apiService)
+    private val repository = MovieRepository()
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()

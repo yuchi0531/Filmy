@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.filmy.app.data.AppContainer
-import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.dto.MovieDetailDto
 import com.filmy.app.data.repository.FavoriteRepository
 import com.filmy.app.data.repository.MovieRepository
@@ -22,7 +21,7 @@ import kotlinx.coroutines.launch
  */
 class MovieDetailViewModel : ViewModel() {
 
-    private val repository = MovieRepository(ApiClient.apiService)
+    private val repository = MovieRepository()
 
     private val favoriteRepository = AppContainer.favoriteRepository
 

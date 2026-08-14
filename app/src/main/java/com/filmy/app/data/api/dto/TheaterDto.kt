@@ -12,6 +12,8 @@ data class TheaterSummaryDto(
     val area_id: String? = null,
     val url: String? = null,
     val distance_km: Double? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 /**

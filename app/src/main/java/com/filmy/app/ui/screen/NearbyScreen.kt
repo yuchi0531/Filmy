@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,6 +36,8 @@ import com.filmy.app.ui.NearbyViewModel
 import com.filmy.app.ui.UiState
 import com.filmy.app.ui.component.ErrorState
 import com.filmy.app.ui.component.LoadingState
+import com.filmy.app.ui.component.MapLibreMap
+import com.filmy.app.ui.component.MapTheaterPin
 import com.filmy.app.ui.component.TheaterCard
 import com.filmy.app.ui.navigation.Screen
 import com.google.android.gms.location.LocationServices
@@ -158,12 +162,30 @@ private fun NearbyContent(
     onTheaterClick: (TheaterSummaryDto) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        MapLibreMap(
+            centerLat = latitude,
+            centerLng = longitude,
+            theaters = theaters.mapNotNull { theater ->
+                val lat = theater.latitude ?: return@mapNotNull null
+                val lng = theater.longitude ?: return@mapNotNull null
+                MapTheaterPin(
+                    id = theater.id,
+                    name = theater.name,
+                    latitude = lat,
+                    longitude = lng,
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp),
+        )
         Text(
             text = String.format(
                 "近くの映画館 緯度 %.4f / 経度 %.4f",
                 latitude, longitude
             ),
             style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 12.dp),
         )
         Text(
             text = if (theaters.isEmpty()) {

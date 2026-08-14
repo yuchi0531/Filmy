@@ -13,14 +13,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,7 +55,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val scope = rememberCoroutineScope()
 
     val nearbyRadiusKm by viewModel.nearbyRadiusKm.collectAsStateWithLifecycle()
+    val apiBaseUrl by viewModel.apiBaseUrl.collectAsStateWithLifecycle()
     var statusMessage by remember { mutableStateOf<String?>(null) }
+
+    // サーバーURL の入力欄。DataStore の現在値を初期値にし、変更後は同期する。
+    var urlText by remember { mutableStateOf(apiBaseUrl) }
+    LaunchedEffect(apiBaseUrl) {
+        urlText = apiBaseUrl
+    }
 
     // エクスポート: SAF で JSON ファイルの作成先を選ばせる。
     val exportLauncher = rememberLauncherForActivityResult(
@@ -118,7 +129,58 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         HorizontalDivider()
         Spacer(modifier = Modifier.height(24.dp))
 
-        // ---- セクション2: お気に入りのバックアップ ----
+        // ---- セクション2: サーバーURL ----
+        SectionTitle("サーバーURL")
+        Text(
+            text = "バックエンド API の接続先を指定します。実機テストでは LAN の IP（例: http://192.168.1.10:8000/）や adb reverse を利用できます。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(
+            value = urlText,
+            onValueChange = { urlText = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            label = { Text("サーバーURL") },
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    statusMessage = try {
+                        viewModel.setApiBaseUrl(urlText)
+                        "保存しました"
+                    } catch (e: IllegalArgumentException) {
+                        Log.w(TAG, "invalid api base url", e)
+                        "URLの形式が正しくありません"
+                    }
+                },
+            ) {
+                Text("保存")
+            }
+            OutlinedButton(
+                onClick = {
+                    urlText = BuildConfig.API_BASE_URL
+                    statusMessage = try {
+                        viewModel.setApiBaseUrl(BuildConfig.API_BASE_URL)
+                        "デフォルトに戻しました"
+                    } catch (e: IllegalArgumentException) {
+                        Log.w(TAG, "reset api base url failed", e)
+                        "URLの形式が正しくありません"
+                    }
+                },
+            ) {
+                Text("リセット")
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // ---- セクション3: お気に入りのバックアップ ----
         SectionTitle("お気に入りのバックアップ")
         Text(
             text = "お気に入りの映画・劇場を JSON ファイルとして書き出し/復元します。",
@@ -153,7 +215,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         HorizontalDivider()
         Spacer(modifier = Modifier.height(24.dp))
 
-        // ---- セクション3: アプリ情報 ----
+        // ---- セクション4: アプリ情報 ----
         SectionTitle("アプリ情報")
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {

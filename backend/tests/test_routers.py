@@ -140,6 +140,8 @@ def test_theaters_nearby_returns_list(client):
         instance = MockClient.return_value
         instance.__enter__.return_value = instance
         instance.get_html.return_value = mock_html.NEARBY_JSON
+        # 座標補完の詳細ページ取得は失敗（None）として扱う
+        instance.get_html_batch.return_value = [None, None]
 
         r = client.get(
             "/api/theaters/nearby",
@@ -158,10 +160,56 @@ def test_theaters_nearby_returns_list(client):
     assert theaters[0]["name"] == "テストシネマ新宿"
     assert theaters[0]["area_id"] == "99"
     assert theaters[0]["url"] == "/theaters/tokyo/99/172"
+    # 座標は取得できず None のまま
+    assert theaters[0]["latitude"] is None
+    assert theaters[0]["longitude"] is None
     # 2件目: /theaters/tokyo/88/200 → area_id "88"
     assert theaters[1]["id"] == "200"
     assert theaters[1]["area_id"] == "88"
     assert theaters[1]["url"] == "/theaters/tokyo/88/200"
+
+
+def test_theaters_nearby_resolves_coords(client):
+    """近隣検索で劇場の座標（緯度・経度）が補完され、SQLiteキャッシュに永続化されること。
+
+    geocode_address をモックして座標を返し、詳細ページの住所から座標が解決される
+    ことを検証する（実ネットワーク不使用）。
+    """
+    import app.routers.theaters as theaters_mod
+
+    with mock.patch("app.routers.common.FilmarksClient") as MockClient:
+        instance = MockClient.return_value
+        instance.__enter__.return_value = instance
+        instance.get_html.return_value = mock_html.NEARBY_JSON
+        # 1件目は詳細ページ取得成功、2件目は失敗（None）
+        instance.get_html_batch.return_value = [
+            mock_html.THEATER_DETAIL_HTML,
+            None,
+        ]
+
+        with mock.patch(
+            "app.geocode.geocode_address", return_value=(35.68, 139.69)
+        ) as geoc:
+            r = client.get(
+                "/api/theaters/nearby",
+                params={"lat": 35.0, "lng": 139.0, "radius": 10.0},
+            )
+
+    assert r.status_code == 200
+    theaters = r.json()["theaters"]
+    assert theaters[0]["id"] == "172"
+    assert theaters[0]["latitude"] == 35.68
+    assert theaters[0]["longitude"] == 139.69
+    # 2件目は詳細ページ取得失敗のため座標なし
+    assert theaters[1]["id"] == "200"
+    assert theaters[1]["latitude"] is None
+    assert theaters[1]["longitude"] is None
+
+    # 座標が SQLite キャッシュに永続化されている
+    assert theaters_mod.coord_cache.get("172") == (35.68, 139.69)
+    assert theaters_mod.coord_cache.get("200") is None
+    # 住所がジオコーディングに渡された
+    geoc.assert_called_once_with("東京都新宿区新宿3-1-1")
 
 
 def test_movies_now_cached_second_call_not_scraped(client):

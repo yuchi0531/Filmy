@@ -43,6 +43,48 @@ def _clear_cache():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _relax_rate_limit(monkeypatch):
+    """テスト向けにレート制限を緩和し、グローバル状態をリセットする。
+
+    - ``rate_limit_per_minute`` を十分大きな値に差し替え、結合テスト等で
+      多数の HTTP リクエストが 429 にならないようにする。
+    - レートリミッターの IP 別アクセス履歴（モジュールレベルのグローバル辞書）を
+      テスト間でクリアし、状態が漏れないようにする。
+    """
+    monkeypatch.setattr(settings, "rate_limit_per_minute", 10000)
+
+    import app.rate_limit as rate_limit
+
+    with rate_limit._lock:
+        rate_limit._requests.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _isolate_coord_cache_and_geocode(tmp_path, monkeypatch) -> None:
+    """座標キャッシュ（SQLite）とジオコーディングをテスト用に分離する。
+
+    - ``app.routers.theaters.coord_cache`` を一時ディレクトリの SQLite に差し替え、
+      テスト実行時にリポジトリ内へ ``./data/theater_coords.db`` が生成されるのを防ぐ。
+    - ``app.geocode.geocode_address`` を None を返すスタブに差し替え、
+      テストが実ネットワーク（国土地理院API）へアクセスするのを防ぐ。
+
+    テスト個別に座標を検証したい場合は、テスト内で monkeypatch により
+    ``geocode_address`` を上書きできる（autouse フィクスチャより後に適用される）。
+    """
+    from app.coord_cache import CoordCache
+
+    import app.routers.theaters as theaters_mod
+
+    monkeypatch.setattr(
+        theaters_mod,
+        "coord_cache",
+        CoordCache(str(tmp_path / "theater_coords.db")),
+    )
+    monkeypatch.setattr("app.geocode.geocode_address", lambda address: None)
+
+
 @pytest.fixture
 def make_soup():
     """HTML文字列を BeautifulSoup（lxml）に変換するヘルパーを返す。"""

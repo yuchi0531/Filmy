@@ -3,7 +3,6 @@ package com.filmy.app.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.dto.MovieSummaryDto
 import com.filmy.app.data.repository.MovieRepository
 import kotlinx.coroutines.async
@@ -22,7 +21,7 @@ data class HomeUiData(
 
 class HomeViewModel : ViewModel() {
 
-    private val repository = MovieRepository(ApiClient.apiService)
+    private val repository = MovieRepository()
 
     private val _uiState = MutableStateFlow<UiState<HomeUiData>>(UiState.Loading)
     val uiState: StateFlow<UiState<HomeUiData>> = _uiState.asStateFlow()

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug ビルド専用の network_security_config。
+     main の network_security_config.xml を上書きし、任意の平文 HTTP（http://）を許可する。
+     実機から LAN の IP（例: http://192.168.1.10:8000/）へ接続するための設定。
+     release ビルドは main の設定（base-config cleartextTrafficPermitted="false"）のまま維持される。 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

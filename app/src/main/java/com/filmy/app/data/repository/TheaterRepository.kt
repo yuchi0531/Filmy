@@ -1,5 +1,6 @@
 package com.filmy.app.data.repository
 
+import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.FilmyApiService
 import com.filmy.app.data.api.dto.AreaListResponseDto
 import com.filmy.app.data.api.dto.NearbyResponseDto
@@ -8,8 +9,11 @@ import com.filmy.app.data.api.dto.TheaterListResponseDto
 
 /**
  * 劇場関連のデータ取得をまとめる Repository。
+ * ベース URL は [ApiClient] が保持し、URL 変更後は次の呼び出しから新 URL が使われる。
  */
-class TheaterRepository(private val apiService: FilmyApiService) {
+class TheaterRepository {
+
+    private val apiService: FilmyApiService get() = ApiClient.apiService
 
     suspend fun getAreas(prefecture: String): AreaListResponseDto =
         apiService.getAreas(prefecture)

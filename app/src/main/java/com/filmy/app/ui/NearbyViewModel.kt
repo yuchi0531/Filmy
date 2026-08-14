@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.filmy.app.data.AppContainer
-import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.dto.NearbyResponseDto
 import com.filmy.app.data.repository.TheaterRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +13,7 @@ import kotlinx.coroutines.launch
 
 class NearbyViewModel : ViewModel() {
 
-    private val repository = TheaterRepository(ApiClient.apiService)
+    private val repository = TheaterRepository()
     private val settingsDataStore = AppContainer.settingsDataStore
 
     private val _uiState = MutableStateFlow<UiState<NearbyResponseDto>>(UiState.Loading)

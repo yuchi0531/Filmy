@@ -22,6 +22,8 @@ android {
             // 実機では adb reverse tcp:8000 tcp:8000 でホストの localhost へ転送。
             // 127.0.0.1 はデバイス自身の localhost を指し、adb reverse によりホストへ転送される。
             buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8000/\"")
+            // API キー認証用。Koyeb の `FILMY_API_KEY` と同じ値を設定すること。
+            buildConfigField("String", "API_KEY", "\"CHANGE_ME\"")
         }
         release {
             isMinifyEnabled = true
@@ -31,6 +33,8 @@ android {
             )
             // Koyeb のデプロイURL（仮）
             buildConfigField("String", "API_BASE_URL", "\"https://filmy.koyeb.app/\"")
+            // API キー認証用。Koyeb の `FILMY_API_KEY` と同じ値を設定すること。
+            buildConfigField("String", "API_KEY", "\"CHANGE_ME\"")
         }
     }
 
@@ -85,6 +89,9 @@ dependencies {
 
     // Location
     implementation(libs.play.services.location)
+
+    // Map (MapLibre GL Native + OpenFreeMap)
+    implementation(libs.maplibre.android.sdk)
 
     // Room (お気に入り永続化)
     implementation(libs.room.runtime)

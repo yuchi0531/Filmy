@@ -3,6 +3,7 @@ package com.filmy.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.filmy.app.data.AppContainer
+import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.local.FavoriteMovieEntity
 import com.filmy.app.data.local.FavoriteTheaterEntity
 import com.filmy.app.data.repository.BackupSerializer
@@ -17,7 +18,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 設定画面の ViewModel。
- * 近隣検索半径（DataStore）と、お気に入りのエクスポート/インポートを担う。
+ * 近隣検索半径（DataStore）、サーバーURL（DataStore + ApiClient）、お気に入りのエクスポート/インポートを担う。
  */
 class SettingsViewModel : ViewModel() {
 
@@ -28,9 +29,29 @@ class SettingsViewModel : ViewModel() {
     val nearbyRadiusKm: StateFlow<Float> = settingsDataStore.nearbyRadiusKm
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 10.0f)
 
+    /** バックエンド API のベース URL。DataStore を購読し、変更をリアルタイムに反映する。 */
+    val apiBaseUrl: StateFlow<String> = settingsDataStore.apiBaseUrl
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            ApiClient.currentBaseUrl(),
+        )
+
     fun setNearbyRadiusKm(radius: Float) {
         viewModelScope.launch {
             settingsDataStore.setNearbyRadiusKm(radius)
+        }
+    }
+
+    /**
+     * サーバーURL を検証・永続化し、[ApiClient] へ即時反映する。
+     * URL が不正な場合は [IllegalArgumentException] を投げる（呼び出し側で try/catch）。
+     */
+    fun setApiBaseUrl(url: String) {
+        // 先に検証（不正なら例外）。ApiClient.updateBaseUrl が正規化してから baseUrl を更新する。
+        ApiClient.updateBaseUrl(url)
+        viewModelScope.launch {
+            settingsDataStore.setApiBaseUrl(ApiClient.currentBaseUrl())
         }
     }
 

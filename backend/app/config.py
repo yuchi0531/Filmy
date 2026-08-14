@@ -27,6 +27,15 @@ class Settings(BaseSettings):
         "Chrome/131.0.0.0 Safari/537.36"
     )
 
+    # クライアント認証用のAPIキー（空文字なら認証を無効化＝ローカル開発用）
+    api_key: str = ""
+
+    # クライアント向けレート制限（IPごとの1分あたり最大リクエスト数）
+    rate_limit_per_minute: int = 60
+
+    # 劇場座標の永続キャッシュ（SQLite）のファイルパス
+    coord_cache_path: str = "./data/theater_coords.db"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="FILMY_",

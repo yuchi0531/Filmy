@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import require_api_key
+from app.rate_limit import rate_limit
 from app.routers import movies, search, theaters
 
 app = FastAPI(
@@ -18,10 +20,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ルーター登録
-app.include_router(movies.router)
-app.include_router(theaters.router)
-app.include_router(search.router)
+# ルーター登録（認証 + レート制限を全APIエンドポイントに適用。
+# /health は依存を付けず、Koyeb のヘルスチェックがキーなしで通るようにする）
+_api_dependencies = [Depends(require_api_key), Depends(rate_limit)]
+app.include_router(movies.router, dependencies=_api_dependencies)
+app.include_router(theaters.router, dependencies=_api_dependencies)
+app.include_router(search.router, dependencies=_api_dependencies)
 
 
 @app.get("/health")

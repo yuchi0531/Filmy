@@ -127,6 +127,8 @@ app/
 | `FILMY_CACHE_TTL_THEATER` | `86400` | 劇場情報キャッシュTTL（24時間） |
 | `FILMY_CACHE_TTL_SEARCH` | `3600` | 検索キャッシュTTL（1時間） |
 | `FILMY_USER_AGENT` | ブラウザUA | スクレイピング時のUser-Agent |
+| `FILMY_API_KEY` | （空文字） | クライアント認証用APIキー（空なら認証無効） |
+| `FILMY_RATE_LIMIT_PER_MINUTE` | `60` | クライアント向けレート制限（IPごと・1分あたり、0以下で無効） |
 
 ## Koyeb デプロイ
 
@@ -152,6 +154,33 @@ cd backend
 koyeb app create filmy
 koyeb service create filmy --docker . --port 8080
 ```
+
+### APIキー認証の設定（必須）
+
+公開する前に必ず `FILMY_API_KEY` を設定してください（未設定のままだと認証が無効のまま公開されます）。
+
+```bash
+koyeb secret create FILMY_API_KEY=<強力なランダムキー>
+# サービスにシークレットを割り当て（必要に応じて再デプロイ）
+koyeb service update filmy --env FILMY_API_KEY=@FILMY_API_KEY
+```
+
+任意でレート制限も調整できます:
+
+```bash
+koyeb secret create FILMY_RATE_LIMIT_PER_MINUTE=60
+```
+
+デプロイ後の疎通確認:
+
+```bash
+curl -H "X-API-Key: <キー>" https://<公開URL>/api/movies/now
+# キーなしだと 401 が返る
+curl https://<公開URL>/api/movies/now
+```
+
+> 注意: `FILMY_API_KEY` は認証を有効化するためのものです。空文字のままデプロイすると、
+> 認証なしで全世界からアクセス可能になるため注意してください。
 
 - ポート `8080`（Dockerfile の `EXPOSE 8080`、`CMD uvicorn ... --port 8080`）
 - ヘルスチェック: `GET /health`（Dockerfile の `HEALTHCHECK` と Koyeb の両方で確認）
