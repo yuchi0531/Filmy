@@ -1,6 +1,7 @@
 package com.filmy.app.data
 
 import com.filmy.app.data.local.AppDatabase
+import com.filmy.app.data.local.SettingsDataStore
 import com.filmy.app.data.repository.FavoriteRepository
 
 /**
@@ -10,6 +11,9 @@ import com.filmy.app.data.repository.FavoriteRepository
  */
 object AppContainer {
     lateinit var database: AppDatabase
+
+    /** 設定 DataStore を初期化するアプリコンテキスト。 */
+    lateinit var settingsDataStore: SettingsDataStore
 
     /** 各 ViewModel から個別に生成するのを避け、ここで 1 つにまとめる。 */
     val favoriteRepository: FavoriteRepository by lazy {

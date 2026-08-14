@@ -19,8 +19,9 @@ android {
 
     buildTypes {
         debug {
-            // エミュレータからホストマシンの localhost（10.0.2.2）
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/\"")
+            // 実機では adb reverse tcp:8000 tcp:8000 でホストの localhost へ転送。
+            // 127.0.0.1 はデバイス自身の localhost を指し、adb reverse によりホストへ転送される。
+            buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:8000/\"")
         }
         release {
             isMinifyEnabled = true
@@ -89,4 +90,10 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
+
+    // DataStore (設定の永続化)
+    implementation(libs.datastore.preferences)
+
+    // Gson (お気に入りバックアップのJSONシリアライズ)
+    implementation(libs.gson)
 }

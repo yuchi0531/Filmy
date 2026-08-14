@@ -17,11 +17,19 @@ interface FavoriteTheaterDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(theater: FavoriteTheaterEntity)
 
+    /** バックアップ復元用。既存は保持しつつ、同一IDは REPLACE で上書きする。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(theaters: List<FavoriteTheaterEntity>)
+
     @Delete
     suspend fun delete(theater: FavoriteTheaterEntity)
 
     @Query("SELECT * FROM favorite_theaters ORDER BY addedAt DESC")
     fun observeAll(): Flow<List<FavoriteTheaterEntity>>
+
+    /** バックアップエクスポート用に全件取得する。 */
+    @Query("SELECT * FROM favorite_theaters ORDER BY addedAt DESC")
+    suspend fun getAll(): List<FavoriteTheaterEntity>
 
     @Query("SELECT * FROM favorite_theaters WHERE theaterId = :id")
     fun observeById(id: String): Flow<FavoriteTheaterEntity?>

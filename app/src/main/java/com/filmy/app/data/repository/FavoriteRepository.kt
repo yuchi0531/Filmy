@@ -32,6 +32,22 @@ class FavoriteRepository(
 
     fun observeFavoriteTheaters(): Flow<List<FavoriteTheaterEntity>> = theaterDao.observeAll()
 
+    /** バックアップエクスポート用。全お気に入り映画を返す。 */
+    suspend fun getAllFavoriteMovies(): List<FavoriteMovieEntity> = movieDao.getAll()
+
+    /** バックアップエクスポート用。全お気に入り劇場を返す。 */
+    suspend fun getAllFavoriteTheaters(): List<FavoriteTheaterEntity> = theaterDao.getAll()
+
+    /** バックアップ復元用。既存を保持しつつ同一IDは REPLACE で上書きする。 */
+    suspend fun importMovies(movies: List<FavoriteMovieEntity>) {
+        if (movies.isNotEmpty()) movieDao.insertAll(movies)
+    }
+
+    /** バックアップ復元用。既存を保持しつつ同一IDは REPLACE で上書きする。 */
+    suspend fun importTheaters(theaters: List<FavoriteTheaterEntity>) {
+        if (theaters.isNotEmpty()) theaterDao.insertAll(theaters)
+    }
+
     /** 登録状態をリアルタイムに反映する Flow。 */
     fun isMovieFavorite(id: String): Flow<Boolean> = movieDao.observeById(id).map { it != null }
 

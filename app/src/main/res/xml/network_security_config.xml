@@ -3,8 +3,12 @@
     <!-- 既定では平文通信（http）を一切許可しない。WebView で開く
          公式サイト（Filmarks 等）は https であるため問題ない。 -->
     <base-config cleartextTrafficPermitted="false" />
-    <!-- エミュレータ上のローカル開発サーバ（10.0.2.2）のみ平文通信を許可する。 -->
+    <!-- ローカル開発サーバのみ平文通信を許可する。
+         ・10.0.2.2 : エミュレータからホストマシンの localhost
+         ・127.0.0.1 / localhost : 実機（adb reverse でホストへ転送） -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">localhost</domain>
     </domain-config>
 </network-security-config>

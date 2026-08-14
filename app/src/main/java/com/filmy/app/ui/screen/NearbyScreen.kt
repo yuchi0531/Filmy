@@ -47,8 +47,6 @@ import kotlin.coroutines.resume
 private const val DEFAULT_LAT = 35.6812
 private const val DEFAULT_LNG = 139.7671
 
-private const val NEARBY_RADIUS_KM = 10.0
-
 /** 自動リフレッシュの間隔（ミリ秒）。 */
 private const val REFRESH_INTERVAL_MS = 30_000L
 
@@ -82,7 +80,7 @@ fun NearbyScreen(
             if (granted) {
                 loadNearbyWithLocation(context, viewModel)
             } else {
-                viewModel.loadNearby(DEFAULT_LAT, DEFAULT_LNG, NEARBY_RADIUS_KM)
+                viewModel.loadNearby(DEFAULT_LAT, DEFAULT_LNG)
             }
         }
     }
@@ -131,9 +129,9 @@ fun NearbyScreen(
 private suspend fun loadNearbyWithLocation(context: Context, viewModel: NearbyViewModel) {
     val location = getCurrentLocation(context.applicationContext)
     if (location != null) {
-        viewModel.loadNearby(location.latitude, location.longitude, NEARBY_RADIUS_KM)
+        viewModel.loadNearby(location.latitude, location.longitude)
     } else {
-        viewModel.loadNearby(DEFAULT_LAT, DEFAULT_LNG, NEARBY_RADIUS_KM)
+        viewModel.loadNearby(DEFAULT_LAT, DEFAULT_LNG)
     }
 }
 
@@ -148,7 +146,7 @@ private fun loadNearbyWithPermission(context: Context, viewModel: NearbyViewMode
     if (hasPermission) {
         scope.launch { loadNearbyWithLocation(context, viewModel) }
     } else {
-        viewModel.loadNearby(DEFAULT_LAT, DEFAULT_LNG, NEARBY_RADIUS_KM)
+        viewModel.loadNearby(DEFAULT_LAT, DEFAULT_LNG)
     }
 }
 

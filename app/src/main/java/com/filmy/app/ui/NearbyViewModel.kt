@@ -3,6 +3,7 @@ package com.filmy.app.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.filmy.app.data.AppContainer
 import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.dto.NearbyResponseDto
 import com.filmy.app.data.repository.TheaterRepository
@@ -14,6 +15,7 @@ import kotlinx.coroutines.launch
 class NearbyViewModel : ViewModel() {
 
     private val repository = TheaterRepository(ApiClient.apiService)
+    private val settingsDataStore = AppContainer.settingsDataStore
 
     private val _uiState = MutableStateFlow<UiState<NearbyResponseDto>>(UiState.Loading)
     val uiState: StateFlow<UiState<NearbyResponseDto>> = _uiState.asStateFlow()
@@ -25,16 +27,28 @@ class NearbyViewModel : ViewModel() {
     /** リフレッシュ時に再利用する直前の検索条件。 */
     private var lastLat: Double? = null
     private var lastLng: Double? = null
-    private var lastRadiusKm: Double = 10.0
 
-    fun loadNearby(lat: Double, lng: Double, radiusKm: Double = 10.0) {
+    /**
+     * 現在の検索半径（km）。DataStore の変更を購読して常に最新値を保持する。
+     * 設定画面で半径を変更すると、次回の loadNearby / refresh から新しい値が使われる。
+     */
+    private var currentRadiusKm: Double = DEFAULT_RADIUS_KM
+
+    init {
+        viewModelScope.launch {
+            settingsDataStore.nearbyRadiusKm.collect { radius ->
+                currentRadiusKm = radius.toDouble()
+            }
+        }
+    }
+
+    fun loadNearby(lat: Double, lng: Double) {
         lastLat = lat
         lastLng = lng
-        lastRadiusKm = radiusKm
         _uiState.value = UiState.Loading
         viewModelScope.launch {
             try {
-                val response = repository.getNearby(lat, lng, radiusKm)
+                val response = repository.getNearby(lat, lng, currentRadiusKm)
                 _uiState.value = UiState.Success(response)
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "近隣の劇場情報を取得できませんでした")
@@ -54,7 +68,7 @@ class NearbyViewModel : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                val response = repository.getNearby(lat, lng, lastRadiusKm)
+                val response = repository.getNearby(lat, lng, currentRadiusKm)
                 _uiState.value = UiState.Success(response)
             } catch (e: Exception) {
                 Log.w(TAG, "refresh failed", e)
@@ -66,5 +80,6 @@ class NearbyViewModel : ViewModel() {
 
     private companion object {
         const val TAG = "NearbyViewModel"
+        const val DEFAULT_RADIUS_KM = 10.0
     }
 }

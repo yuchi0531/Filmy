@@ -9,6 +9,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -190,6 +191,9 @@ fun WebViewScreen(
                         )
                     }
                 },
+                // 外側Scaffold（MainActivity）が既にステータスバーのインセットを処理しているため、
+                // ここではステータスバー分の余白を二重に取らない。
+                windowInsets = WindowInsets(0.dp),
             )
         },
     ) { innerPadding ->
