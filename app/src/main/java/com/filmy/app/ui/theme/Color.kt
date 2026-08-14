@@ -2,6 +2,7 @@ package com.filmy.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+// フォールバック用の固定カラー（Android 12 未満で使用）
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
 val Pink80 = Color(0xFFEFB8C8)
