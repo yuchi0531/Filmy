@@ -63,6 +63,16 @@ class NearbyViewModel : ViewModel() {
     fun refresh() {
         val lat = lastLat ?: return
         val lng = lastLng ?: return
+        refreshWithLocation(lat, lng)
+    }
+
+    /**
+     * 指定した座標を最終座標として記録しつつ、Loading に戻さずに再取得する。
+     * 30秒リフレッシュ時に現在地を再取得した結果を反映するために使う。
+     */
+    fun refreshWithLocation(lat: Double, lng: Double) {
+        lastLat = lat
+        lastLng = lng
         // L6: フラグのセットをコルーチン起動前（同期的）に原子的に行い、
         // check-then-act の競合による二重フェッチを防ぐ。
         if (!_isRefreshing.compareAndSet(false, true)) return

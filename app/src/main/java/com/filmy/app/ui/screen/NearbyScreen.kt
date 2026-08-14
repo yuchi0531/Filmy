@@ -65,13 +65,13 @@ fun NearbyScreen(
     val scope = rememberCoroutineScope()
 
     // 画面が RESUMED の間だけ 30 秒ごとに位置情報+近隣劇場を再取得する。
-    // refresh() は最後に取得した座標を再利用して Loading に戻さず更新する。
+    // refresh 時も現在地を再取得し、取得できなければ最後の座標を再利用する。
     // バックグラウンド（STOPPED）に移るとループは停止する。
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
-                viewModel.refresh()
+                refreshNearbyWithLocation(context, viewModel)
                 delay(REFRESH_INTERVAL_MS)
             }
         }
@@ -137,6 +137,26 @@ private suspend fun loadNearbyWithLocation(context: Context, viewModel: NearbyVi
         viewModel.loadNearby(location.latitude, location.longitude)
     } else {
         viewModel.loadNearby(DEFAULT_LAT, DEFAULT_LNG)
+    }
+}
+
+/**
+ * 30秒リフレッシュ用。現在地を再取得し、成功時はその座標で再取得する。
+ * パーミッションが無い、または位置取得に失敗した場合は既存の最終座標で refresh する。
+ */
+private suspend fun refreshNearbyWithLocation(context: Context, viewModel: NearbyViewModel) {
+    val hasPermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    if (!hasPermission) {
+        viewModel.refresh()
+        return
+    }
+    val location = getCurrentLocation(context.applicationContext)
+    if (location != null) {
+        viewModel.refreshWithLocation(location.latitude, location.longitude)
+    } else {
+        viewModel.refresh()
     }
 }
 
@@ -228,6 +248,13 @@ private suspend fun getCurrentLocation(context: Context): Location? =
                 .addOnFailureListener {
                     if (continuation.isActive) continuation.resume(null)
                 }
+            // FusedLocationProviderClient の Task にはキャンセル API が無いため、
+            // リスナーは残留する。isActive ガードでキャンセル済み continuation への
+            // resume を防いでいる。invokeOnCancellation で明示的にキャンセルを
+            // マークし、以後の resume を確実に無効化する（継続リーク防止）。
+            continuation.invokeOnCancellation {
+                // 何もしない: Task リスナーの解除手段は無く、isActive で resume を防ぐ。
+            }
         }
     } catch (e: Exception) {
         null

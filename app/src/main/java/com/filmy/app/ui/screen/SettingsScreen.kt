@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -59,9 +60,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     // サーバーURL の入力欄。DataStore の現在値を初期値にし、変更後は同期する。
+    // 編集中（フォーカスあり）は外部値の上書きを防ぎ、入力の消失を避ける。
     var urlText by remember { mutableStateOf(apiBaseUrl) }
+    var urlFieldFocused by remember { mutableStateOf(false) }
     LaunchedEffect(apiBaseUrl) {
-        urlText = apiBaseUrl
+        if (!urlFieldFocused && urlText != apiBaseUrl) {
+            urlText = apiBaseUrl
+        }
     }
 
     // エクスポート: SAF で JSON ファイルの作成先を選ばせる。
@@ -140,7 +145,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         OutlinedTextField(
             value = urlText,
             onValueChange = { urlText = it },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { urlFieldFocused = it.isFocused },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             label = { Text("サーバーURL") },

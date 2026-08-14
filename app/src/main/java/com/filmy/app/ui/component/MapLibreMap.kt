@@ -71,14 +71,17 @@ fun MapLibreMap(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val density = context.resources.displayMetrics.density
+    // Activity Context を保持すると config change 時に古い Activity がリークするため、
+    // アプリケーション Context を MapView / MapLibre に渡す。
+    val appContext = context.applicationContext
 
     // MapLibre 13.x では MapView 生成前に getInstance による初期化が必須。
     // OpenFreeMap はカスタムタイルサーバのため APIキー不要（空文字）。
     val mapView = remember {
         if (!MapLibre.hasInstance()) {
-            MapLibre.getInstance(context, "", WellKnownTileServer.MapLibre)
+            MapLibre.getInstance(appContext, "", WellKnownTileServer.MapLibre)
         }
-        MapView(context)
+        MapView(appContext)
     }
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var style by remember { mutableStateOf<Style?>(null) }

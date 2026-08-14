@@ -3,14 +3,15 @@ package com.filmy.app.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.filmy.app.data.api.dto.MovieListResponseDto
 import com.filmy.app.data.api.dto.MovieSummaryDto
 import com.filmy.app.data.repository.MovieRepository
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 /** Home 画面に表示する各カテゴリの映画リスト。 */
 data class HomeUiData(
@@ -64,10 +65,11 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    private suspend fun fetch(): HomeUiData = coroutineScope {
-        val now = async { repository.getNowPlaying() }
-        val coming = async { repository.getComingSoon() }
-        val trend = async { repository.getTrending() }
+    private suspend fun fetch(): HomeUiData = supervisorScope {
+        // 各カテゴリは独立に失敗を吸収し、1 件の失敗で他 2 件の成功データを破棄しない。
+        val now = async { runCatching { repository.getNowPlaying() }.getOrElse { Log.w(TAG, "now failed", it); MovieListResponseDto() } }
+        val coming = async { runCatching { repository.getComingSoon() }.getOrElse { Log.w(TAG, "coming failed", it); MovieListResponseDto() } }
+        val trend = async { runCatching { repository.getTrending() }.getOrElse { Log.w(TAG, "trend failed", it); MovieListResponseDto() } }
         HomeUiData(
             now = now.await().results,
             coming = coming.await().results,

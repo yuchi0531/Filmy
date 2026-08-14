@@ -18,7 +18,9 @@ class SearchViewModel : ViewModel() {
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    private val _uiState = MutableStateFlow<UiState<MovieListResponseDto>>(UiState.Loading)
+    private val _uiState = MutableStateFlow<UiState<MovieListResponseDto>>(
+        UiState.Success(MovieListResponseDto())
+    )
     val uiState: StateFlow<UiState<MovieListResponseDto>> = _uiState.asStateFlow()
 
     /** 実行中の検索ジョブ。既存の検索をキャンセルして競合を防ぐ。 */
@@ -30,7 +32,12 @@ class SearchViewModel : ViewModel() {
 
     fun search() {
         val q = _query.value.trim()
-        if (q.isEmpty()) return
+        if (q.isEmpty()) {
+            // 空クエリは検索せず、空の Success に戻してプレースホルダを表示する。
+            searchJob?.cancel()
+            _uiState.value = UiState.Success(MovieListResponseDto())
+            return
+        }
         // 前回の検索がまだ応答を返していない場合、古いレスポンスで結果が上書きされないよう先にキャンセルする。
         searchJob?.cancel()
         _uiState.value = UiState.Loading
