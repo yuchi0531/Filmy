@@ -44,6 +44,10 @@ router = APIRouter(prefix="/api/theaters", tags=["theaters"])
 
 logger = logging.getLogger(__name__)
 
+# L3: 都道府県スラッグのパスパラメータ制約。Filmarks URL とキャッシュキーに
+# そのまま埋め込まれるため、小文字英数字・ハイフンのみ許可する。
+_PREFECTURE_PATTERN = r"^[a-z0-9\-]+$"
+
 # エンドポイント間のキャッシュ名前空間
 _CACHE_PREF = "theater_pref"
 _CACHE_AREA = "theater_area"
@@ -56,6 +60,16 @@ coord_cache = CoordCache(settings.coord_cache_path)
 
 # 詳細ページの住所抽出セレクタ（Filmarks 実HTML構造）
 _ADDRESS_SELECTOR = "div.p-theater-movies-info__address"
+
+# 座標補完処理中（in-flight）の theater_id 集合と、それを保護するロック。
+# 未解決座標の重複補完（詳細ページ再取得・再ジオコーディング）を防ぐ。
+_in_flight_lock = threading.Lock()
+_in_flight: set[str] = set()
+
+# 未解決座標が残る場合の近隣検索キャッシュTTL（秒）。
+# 補完完了までの短期間キャッシュで /pia_theaters の再取得を抑止しつつ、
+# 補完完了後は正規キャッシュ（cache_ttl_schedule）へ自然に移行させる。
+_NEARBY_PENDING_TTL = 30.0
 
 
 def _detail_path_from_url(url: str) -> str | None:
@@ -133,17 +147,39 @@ def _resolve_coords(client: FilmarksClient, theaters: list[TheaterSummary]) -> N
 def _schedule_coord_resolution(theaters: list[TheaterSummary]) -> None:
     """未補完の劇場座標をバックグラウンドスレッドで補完する。
 
+    - 引数の ``theaters`` は補完専用のオブジェクト（呼び出し側でレスポンス用
+      オブジェクトから ``model_copy()`` で分離済み）。ここでミューテートしても
+      レスポンスには影響しない。
+    - 既に補完処理中（``_in_flight`` に存在）の theater はスキップし、重複補完を防ぐ。
     - 詳細ページ取得（get_html_batch）とジオコーディングは FilmarksClient を
       新規生成して実行する（リクエスト処理と分離し、5秒スロットルは引き続き守られる）。
     - 補完結果は SQLite（coord_cache）に保存されるため、次回リクエストで反映される。
     - 失敗しても例外を握りつぶし、メインのレスポンスには影響させない。
+    - 補完対象が無ければスレッドを起動しない。
     """
+    # in-flight の theater を除外し、新規補完対象のみをスレッドに回す。
+    to_resolve: list[TheaterSummary] = []
+    with _in_flight_lock:
+        for t in theaters:
+            if t.id in _in_flight:
+                continue
+            _in_flight.add(t.id)
+            to_resolve.append(t)
+
+    if not to_resolve:
+        return
+
     def _task() -> None:
         try:
             with FilmarksClient() as client:
-                _resolve_coords(client, theaters)
+                _resolve_coords(client, to_resolve)
         except Exception:
             logger.warning("バックグラウンド座標補完に失敗しました", exc_info=True)
+        finally:
+            # 補完完了（成功・失敗を問わず）で in-flight から削除する。
+            with _in_flight_lock:
+                for t in to_resolve:
+                    _in_flight.discard(t.id)
 
     threading.Thread(target=_task, daemon=True).start()
 
@@ -239,6 +275,10 @@ def _nearby(lat: float, lng: float, radius_km: float) -> NearbyResponse:
         )
         raw = client.get_html(path)
         data = json.loads(raw)
+        # L5: Filmarks 側が想定外の JSON（list やスカラー）を返しても
+        # AttributeError にならないよう dict に正規化する。
+        if not isinstance(data, dict):
+            data = {}
         theaters: list[TheaterSummary] = []
         for p in data.get("piaTheaters", []) or []:
             tid = p.get("id")
@@ -278,11 +318,17 @@ def _nearby(lat: float, lng: float, radius_km: float) -> NearbyResponse:
     result = run_scrape(scrape)
 
     if pending:
-        # 未補完の劇場がある場合はバックグラウンドで補完し、今回はキャッシュしない
-        # （次回リクエスト時に座標付きで応答・キャッシュする）。
-        _schedule_coord_resolution(pending)
+        # 未補完の劇場がある場合はバックグラウンドで補完する。レスポンス用
+        # オブジェクト（result.theaters）と補完用オブジェクトを model_copy()
+        # で分離し、メインスレッドのシリアライズ中に latitude のみセット・
+        # longitude が None の途中状態が混入するのを防ぐ（M2）。
+        _schedule_coord_resolution([t.model_copy() for t in pending])
+        # 座標解決済みの劇場が1件でもあれば、短い TTL（30秒）でキャッシュして
+        # 補完完了までの間の /pia_theaters 再取得を抑止する（M6）。
+        if len(result.theaters) > len(pending):
+            cache_manager.set(_CACHE_NEARBY, key, result, _NEARBY_PENDING_TTL)
     else:
-        # 全劇場の座標が揃っている場合のみキャッシュする
+        # 全劇場の座標が揃っている場合のみ正規キャッシュ（1時間）する
         cache_manager.set(_CACHE_NEARBY, key, result, settings.cache_ttl_schedule)
     return result
 
@@ -292,8 +338,8 @@ def _nearby(lat: float, lng: float, radius_km: float) -> NearbyResponse:
 # prefecture と解釈されるパス衝突が起きるため、ルート定義順が重要。
 @router.get("/nearby", response_model=NearbyResponse)
 def nearby(
-    lat: float = Query(..., description="現在地の緯度"),
-    lng: float = Query(..., description="現在地の経度"),
+    lat: float = Query(..., ge=-90, le=90, description="現在地の緯度"),
+    lng: float = Query(..., ge=-180, le=180, description="現在地の経度"),
     radius: float = Query(10.0, ge=1, le=100, description="検索半径（km）"),
 ) -> NearbyResponse:
     """近隣劇場検索。半径1〜100km。"""
@@ -301,7 +347,7 @@ def nearby(
 
 
 @router.get("/{prefecture}", response_model=AreaListResponse)
-def get_prefecture(prefecture: str = Path(...)) -> AreaListResponse:
+def get_prefecture(prefecture: str = Path(..., pattern=_PREFECTURE_PATTERN)) -> AreaListResponse:
     """都道府県別のエリア一覧。"""
     return _prefecture_list(prefecture)
 
@@ -311,7 +357,7 @@ def get_prefecture(prefecture: str = Path(...)) -> AreaListResponse:
     response_model=TheaterListResponse,
 )
 def get_area(
-    prefecture: str = Path(...),
+    prefecture: str = Path(..., pattern=_PREFECTURE_PATTERN),
     area_id: str = Path(..., pattern=r"^\d+$"),
 ) -> TheaterListResponse:
     """エリア別の劇場一覧。"""
@@ -323,7 +369,7 @@ def get_area(
     response_model=TheaterDetail,
 )
 def get_theater(
-    prefecture: str = Path(...),
+    prefecture: str = Path(..., pattern=_PREFECTURE_PATTERN),
     area_id: str = Path(..., pattern=r"^\d+$"),
     theater_id: str = Path(..., pattern=r"^\d+$"),
 ) -> TheaterDetail:

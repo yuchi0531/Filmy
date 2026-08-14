@@ -127,7 +127,9 @@ app/
 | `FILMY_CACHE_TTL_THEATER` | `86400` | 劇場情報キャッシュTTL（24時間） |
 | `FILMY_CACHE_TTL_SEARCH` | `3600` | 検索キャッシュTTL（1時間） |
 | `FILMY_USER_AGENT` | ブラウザUA | スクレイピング時のUser-Agent |
-| `FILMY_API_KEY` | （空文字） | クライアント認証用APIキー（空なら認証無効） |
+| `FILMY_ENVIRONMENT` | `development` | 実行環境（`development` / `production`） |
+| `FILMY_API_KEY` | （空文字） | クライアント認証用APIキー（developmentでは空なら認証無効、productionでは空なら503） |
+| `FILMY_TRUSTED_PROXIES` | （空文字） | 信頼できるリバースプロキシのIP（カンマ区切り）。未設定ならX-Forwarded-Forを信頼しない |
 | `FILMY_RATE_LIMIT_PER_MINUTE` | `60` | クライアント向けレート制限（IPごと・1分あたり、0以下で無効） |
 
 ## Koyeb デプロイ
@@ -157,12 +159,16 @@ koyeb service create filmy --docker . --port 8080
 
 ### APIキー認証の設定（必須）
 
-公開する前に必ず `FILMY_API_KEY` を設定してください（未設定のままだと認証が無効のまま公開されます）。
+公開前に必ず `FILMY_API_KEY` を設定してください。`FILMY_ENVIRONMENT=production` のときに
+`FILMY_API_KEY` が未設定（空）だと、認証をスキップせず **503（fail-closed）** を返して
+エンドポイントを公開しません（設定漏れによる全世界公開を防止）。
 
 ```bash
 koyeb secret create FILMY_API_KEY=<強力なランダムキー>
+# production 環境であることを明示（省略時は development となり認証がスキップされる）
+koyeb secret create FILMY_ENVIRONMENT=production
 # サービスにシークレットを割り当て（必要に応じて再デプロイ）
-koyeb service update filmy --env FILMY_API_KEY=@FILMY_API_KEY
+koyeb service update filmy --env FILMY_API_KEY=@FILMY_API_KEY --env FILMY_ENVIRONMENT=@FILMY_ENVIRONMENT
 ```
 
 任意でレート制限も調整できます:
@@ -170,6 +176,11 @@ koyeb service update filmy --env FILMY_API_KEY=@FILMY_API_KEY
 ```bash
 koyeb secret create FILMY_RATE_LIMIT_PER_MINUTE=60
 ```
+
+Koyeb 等のリバースプロキシ越しに正しくクライアントIPでレート制限したい場合は、
+プロキシのIPを `FILMY_TRUSTED_PROXIES`（カンマ区切り）に設定してください。
+未設定のままでも、X-Forwarded-For を信頼せず直結IPでレート制限するため
+（スプーフィング対策）、動作自体は安全です。
 
 デプロイ後の疎通確認:
 
@@ -179,8 +190,10 @@ curl -H "X-API-Key: <キー>" https://<公開URL>/api/movies/now
 curl https://<公開URL>/api/movies/now
 ```
 
-> 注意: `FILMY_API_KEY` は認証を有効化するためのものです。空文字のままデプロイすると、
-> 認証なしで全世界からアクセス可能になるため注意してください。
+> 注意: `FILMY_ENVIRONMENT=production` の場合は `FILMY_API_KEY` が必須です。
+> 未設定のままだと 503 でリクエストを拒否します（fail-closed）。
+> `development`（デフォルト）では空キーで認証をスキップするため、公開環境では
+> 必ず `production` を設定してください。
 
 - ポート `8080`（Dockerfile の `EXPOSE 8080`、`CMD uvicorn ... --port 8080`）
 - ヘルスチェック: `GET /health`（Dockerfile の `HEALTHCHECK` と Koyeb の両方で確認）

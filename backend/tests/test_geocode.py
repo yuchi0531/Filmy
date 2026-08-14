@@ -118,14 +118,14 @@ def test_geocode_addresses_preserves_order_and_mixed_results(monkeypatch):
         calls.append(address)
         if address == "失敗住所":
             return None
-        # 並列実行でも入力順が保たれることを検証するため、意図的に遅延を挟む
         return (float(len(address)), float(len(address)))
 
     monkeypatch.setattr(geocode, "geocode_address", fake)
 
     result = geocode.geocode_addresses(["住所A", "失敗住所", "住所BB"])
 
-    assert calls == ["住所A", "失敗住所", "住所BB"]
+    # 並列実行では呼び出し順は保証されないため、集合で検証する
+    assert sorted(calls) == sorted(["住所A", "失敗住所", "住所BB"])
     assert result[0] == (3.0, 3.0)
     assert result[1] is None
     assert result[2] == (4.0, 4.0)

@@ -83,6 +83,10 @@ def _isolate_coord_cache_and_geocode(tmp_path, monkeypatch) -> None:
         CoordCache(str(tmp_path / "theater_coords.db")),
     )
     monkeypatch.setattr("app.geocode.geocode_address", lambda address: None)
+    # 座標補完の in-flight 集合（モジュールレベルのグローバル）をテスト間でクリアし、
+    # デーモンスレッドの finally クリーンアップと競合しても状態が漏れないようにする。
+    with theaters_mod._in_flight_lock:
+        theaters_mod._in_flight.clear()
 
 
 @pytest.fixture

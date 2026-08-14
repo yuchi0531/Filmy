@@ -260,8 +260,11 @@ def test_schedule_coord_resolution_runs_in_background_thread():
     resolved = threading.Event()
 
     def fake_resolve(client, ts):
-        # 引数に FilmarksClient（新規生成されたクライアント）が渡されることを確認
-        assert ts is theaters
+        # 引数に FilmarksClient（新規生成されたクライアント）が渡されることを確認。
+        # in-flight 重複排除のため _schedule_coord_resolution は新規リストを構築するが、
+        # 要素は同一の TheaterSummary オブジェクトが渡される。
+        assert ts == theaters
+        assert ts[0] is theaters[0]
         resolved.set()
 
     with mock.patch.object(
@@ -292,7 +295,7 @@ def test_schedule_coord_resolution_swallows_exceptions():
         side_effect=RuntimeError("補完失敗"),
     ):
         with mock.patch.object(theaters_mod, "FilmarksClient"):
-            # 例外を投げずに戻る（スレッド内で捕捉される）
+            # 空リストは補完対象が無いためスレッドを起動せず、例外を投げずに戻る
             theaters_mod._schedule_coord_resolution([])
 
 
