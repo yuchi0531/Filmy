@@ -197,7 +197,7 @@ def test_theaters_detail_with_schedule_ok(client):
     assert movie["movie_title"] == "スケジュール映画"
     assert movie["poster_url"] == "https://img.example.test/sched.jpg"
     dates = movie["dates"]
-    assert len(dates) == 3  # schedule_days=3
+    assert len(dates) == 7  # schedule_days=7
     for times in dates.values():
         assert times == ["10:00", "13:30"]
 

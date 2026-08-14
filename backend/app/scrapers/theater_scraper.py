@@ -222,12 +222,12 @@ class TheaterDetailScraper(BaseScraper):
     JSON API（上映中映画＋日付別スケジュール）を合成して ``TheaterDetail`` を返す。
     """
 
-    def __init__(self, client, schedule_days: int = 3) -> None:
+    def __init__(self, client, schedule_days: int = 7) -> None:
         super().__init__(client)
         # スケジュールを取得する日数（今日から schedule_days 日分）。
         # 共有スロットル（プロセス共有5秒）がリクエスト毎に直列化するため、
-        # 7日分を並列化しても所要時間は減らない。日数を減らして鮮度優先の
-        # 3日分にすることで、詳細取得のレイテンシを抑える。
+        # 7日分の取得は初回に約40秒かかるが、キャッシュTTLを24時間に延長
+        # しているため再取得頻度は低い。Filmarksは毎週火曜更新のため鮮度も十分。
         self.schedule_days = max(1, schedule_days)
 
     def _fetch_json(self, path: str) -> dict:

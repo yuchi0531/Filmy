@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # キャッシュTTL（秒）
     cache_ttl_movie_list: int = 21600  # 6時間
     cache_ttl_movie_detail: int = 86400  # 24時間
-    cache_ttl_schedule: int = 3600  # 1時間
+    cache_ttl_schedule: int = 86400  # 24時間（スケジュールは毎週火曜更新のため）
     cache_ttl_theater: int = 86400  # 24時間
     cache_ttl_search: int = 3600  # 1時間
 
