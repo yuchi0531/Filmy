@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,10 +20,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -30,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -60,6 +65,10 @@ fun TheaterDetailScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // お気に入り状態をリアルタイム反映（DB 更新で再発行される）。
+    val isFavoriteFlow = remember(theaterId) { viewModel.isFavorite(theaterId) }
+    val isFavorite by isFavoriteFlow.collectAsStateWithLifecycle(initialValue = false)
+
     // 初回のみ取得する（画面回転時は ViewModel の状態を維持）。
     LaunchedEffect(prefecture, areaId, theaterId) {
         if (uiState is UiState.Loading) {
@@ -72,6 +81,8 @@ fun TheaterDetailScreen(
         is UiState.Error -> ErrorState(message = state.message, onRetry = viewModel::retry)
         is UiState.Success -> TheaterDetailContent(
             theater = state.data,
+            isFavorite = isFavorite,
+            onToggleFavorite = { viewModel.toggleFavorite(state.data, prefecture, areaId) },
             onOpenMap = {
                 openMap(context, state.data)?.let { message ->
                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -119,6 +130,8 @@ private fun isHttpUrl(url: String): Boolean {
 @Composable
 private fun TheaterDetailContent(
     theater: TheaterDetailDto,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
     onOpenMap: () -> Unit,
     onNavigateWebView: (String) -> Unit,
 ) {
@@ -127,11 +140,28 @@ private fun TheaterDetailContent(
         contentPadding = PaddingValues(16.dp),
     ) {
         item {
-            Text(
-                text = theater.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = theater.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (isFavorite) "お気に入りを解除" else "お気に入りに追加",
+                        tint = if (isFavorite) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
             if (!theater.address.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

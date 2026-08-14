@@ -47,7 +47,7 @@ fun NavGraph(
         composable(Screen.Home.route) { HomeScreen(navController = navController) }
         composable(Screen.Nearby.route) { NearbyScreen(navController = navController) }
         composable(Screen.Search.route) { SearchScreen(navController = navController) }
-        composable(Screen.Favorites.route) { FavoritesScreen() }
+        composable(Screen.Favorites.route) { FavoritesScreen(navController = navController) }
         composable(Screen.Settings.route) { SettingsScreen() }
 
         composable(

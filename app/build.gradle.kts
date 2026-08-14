@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -44,6 +45,11 @@ android {
     }
 }
 
+// Room のスキーマエクスポート先（AppDatabase の exportSchema = true に対応）。
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core)
@@ -71,4 +77,9 @@ dependencies {
 
     // Location
     implementation(libs.play.services.location)
+
+    // Room (お気に入り永続化)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 }

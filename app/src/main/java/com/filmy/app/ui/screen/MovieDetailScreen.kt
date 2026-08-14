@@ -17,16 +17,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -56,6 +60,10 @@ fun MovieDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // お気に入り状態をリアルタイム反映（DB 更新で再発行される）。
+    val isFavoriteFlow = remember(movieId) { viewModel.isFavorite(movieId) }
+    val isFavorite by isFavoriteFlow.collectAsStateWithLifecycle(initialValue = false)
+
     // 初回のみ取得する（画面回転時は ViewModel の状態を維持）。
     LaunchedEffect(movieId) {
         if (uiState is UiState.Loading) {
@@ -68,6 +76,8 @@ fun MovieDetailScreen(
         is UiState.Error -> ErrorState(message = state.message, onRetry = viewModel::retry)
         is UiState.Success -> MovieDetailContent(
             movie = state.data,
+            isFavorite = isFavorite,
+            onToggleFavorite = { viewModel.toggleFavorite(state.data) },
             onNavigateWebView = onNavigateWebView,
         )
     }
@@ -76,6 +86,8 @@ fun MovieDetailScreen(
 @Composable
 private fun MovieDetailContent(
     movie: MovieDetailDto,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
     onNavigateWebView: (String) -> Unit,
 ) {
     LazyColumn(
@@ -93,11 +105,22 @@ private fun MovieDetailContent(
         }
         item {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = movie.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                // タイトルとお気に入りボタン
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = movie.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FavoriteButton(
+                        isFavorite = isFavorite,
+                        onClick = onToggleFavorite,
+                    )
+                }
                 if (!movie.original_title.isNullOrBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -265,6 +288,25 @@ private fun StreamingItem(info: StreamingInfo) {
             text = info.type,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** お気に入りの追加/解除を行うハートボタン。登録済みなら塗りつぶしアイコンを表示する。 */
+@Composable
+private fun FavoriteButton(
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick) {
+        Icon(
+            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+            contentDescription = if (isFavorite) "お気に入りを解除" else "お気に入りに追加",
+            tint = if (isFavorite) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
     }
 }

@@ -3,10 +3,14 @@ package com.filmy.app.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.filmy.app.data.AppContainer
 import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.dto.TheaterDetailDto
+import com.filmy.app.data.repository.FavoriteRepository
 import com.filmy.app.data.repository.TheaterRepository
+import com.filmy.app.data.repository.toFavoriteEntity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +23,8 @@ import kotlinx.coroutines.launch
 class TheaterDetailViewModel : ViewModel() {
 
     private val repository = TheaterRepository(ApiClient.apiService)
+
+    private val favoriteRepository = AppContainer.favoriteRepository
 
     private val _uiState = MutableStateFlow<UiState<TheaterDetailDto>>(UiState.Loading)
     val uiState: StateFlow<UiState<TheaterDetailDto>> = _uiState.asStateFlow()
@@ -52,6 +58,19 @@ class TheaterDetailViewModel : ViewModel() {
         val areaId = lastAreaId ?: return
         val theaterId = lastTheaterId ?: return
         loadTheaterDetail(prefecture, areaId, theaterId)
+    }
+
+    /** お気に入り状態をリアルタイムに反映する Flow。 */
+    fun isFavorite(theaterId: String): Flow<Boolean> =
+        favoriteRepository.isTheaterFavorite(theaterId)
+
+    /** お気に入り登録/解除を切り替える。prefecture / areaId は詳細画面遷移時の値（DTO に無い場合のフォールバック）。 */
+    fun toggleFavorite(theater: TheaterDetailDto, prefecture: String, areaId: String) {
+        viewModelScope.launch {
+            favoriteRepository.toggleTheaterFavorite(
+                theater.toFavoriteEntity(prefectureFallback = prefecture, areaIdFallback = areaId)
+            )
+        }
     }
 
     private companion object {

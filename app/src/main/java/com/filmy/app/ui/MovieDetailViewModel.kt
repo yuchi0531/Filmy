@@ -3,10 +3,14 @@ package com.filmy.app.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.filmy.app.data.AppContainer
 import com.filmy.app.data.api.ApiClient
 import com.filmy.app.data.api.dto.MovieDetailDto
+import com.filmy.app.data.repository.FavoriteRepository
 import com.filmy.app.data.repository.MovieRepository
+import com.filmy.app.data.repository.toFavoriteEntity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +23,8 @@ import kotlinx.coroutines.launch
 class MovieDetailViewModel : ViewModel() {
 
     private val repository = MovieRepository(ApiClient.apiService)
+
+    private val favoriteRepository = AppContainer.favoriteRepository
 
     private val _uiState = MutableStateFlow<UiState<MovieDetailDto>>(UiState.Loading)
     val uiState: StateFlow<UiState<MovieDetailDto>> = _uiState.asStateFlow()
@@ -46,6 +52,17 @@ class MovieDetailViewModel : ViewModel() {
     fun retry() {
         val movieId = lastMovieId ?: return
         loadMovieDetail(movieId)
+    }
+
+    /** お気に入り状態をリアルタイムに反映する Flow。 */
+    fun isFavorite(movieId: String): Flow<Boolean> =
+        favoriteRepository.isMovieFavorite(movieId)
+
+    /** お気に入り登録/解除を切り替える。 */
+    fun toggleFavorite(movie: MovieDetailDto) {
+        viewModelScope.launch {
+            favoriteRepository.toggleMovieFavorite(movie.toFavoriteEntity())
+        }
     }
 
     private companion object {
