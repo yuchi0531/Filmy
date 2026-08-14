@@ -15,12 +15,11 @@ build/
 *.egg
 
 # --- Android ---
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-android/captures/
-android/.idea/
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+local.properties
+captures/
+.idea/
 *.apk
 *.aab
 *.keystore

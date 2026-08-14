@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Filmy</string>
+    <!-- Tab titles -->
+    <string name="tab_home">Home</string>
+    <string name="tab_nearby">Nearby</string>
+    <string name="tab_search"></string>
+    <string name="tab_favorites">Favorites</string>
+    <string name="tab_settings">Settings</string>
+</resources>
