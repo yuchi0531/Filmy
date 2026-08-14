@@ -8,6 +8,8 @@ Filmarks は劇場の座標を返さないため、詳細ページから取得�
   ``[経度, 緯度]``（この順）。戻り値は ``(緯度, 経度)`` の順に正規化する。
 """
 
+from concurrent.futures import ThreadPoolExecutor
+
 import httpx
 
 from app.config import settings
@@ -50,3 +52,17 @@ def geocode_address(address: str) -> tuple[float, float] | None:
         return float(latitude), float(longitude)
     except (TypeError, ValueError):
         return None
+
+
+def geocode_addresses(addresses: list[str]) -> list[tuple[float, float] | None]:
+    """複数住所を並列でジオコーディングし、入力順で結果リストを返す。
+
+    各要素は ``(緯度, 経度)`` または ``None``（失敗）。
+    国土地理院APIはレート制限が緩いため、並列実行しても問題ない。
+    """
+    if not addresses:
+        return []
+
+    max_workers = min(len(addresses), 10)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        return list(executor.map(geocode_address, addresses))

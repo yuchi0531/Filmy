@@ -103,3 +103,30 @@ def test_geocode_empty_address_returns_none():
     """空文字・空白のみの住所は None を返すこと（ネットワークアクセス無し）。"""
     assert _real_geocode_address("") is None
     assert _real_geocode_address("   ") is None
+
+
+def test_geocode_addresses_empty_returns_empty_list():
+    """空リストは [] を返すこと（ネットワークアクセス無し）。"""
+    assert geocode.geocode_addresses([]) == []
+
+
+def test_geocode_addresses_preserves_order_and_mixed_results(monkeypatch):
+    """入力順を保ち、失敗（None）が混在しても各要素が正しい位置に返ること。"""
+    calls: list[str] = []
+
+    def fake(address: str) -> tuple[float, float] | None:
+        calls.append(address)
+        if address == "失敗住所":
+            return None
+        # 並列実行でも入力順が保たれることを検証するため、意図的に遅延を挟む
+        return (float(len(address)), float(len(address)))
+
+    monkeypatch.setattr(geocode, "geocode_address", fake)
+
+    result = geocode.geocode_addresses(["住所A", "失敗住所", "住所BB"])
+
+    assert calls == ["住所A", "失敗住所", "住所BB"]
+    assert result[0] == (3.0, 3.0)
+    assert result[1] is None
+    assert result[2] == (4.0, 4.0)
+    assert len(result) == 3

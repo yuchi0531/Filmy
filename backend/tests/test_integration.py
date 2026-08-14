@@ -43,12 +43,19 @@ def client() -> TestClient:
 
     ``run_scrape``（app.routers.common）が参照する ``FilmarksClient`` を
     FakeFilmarksClient に差し替える。実ネットワークへは一切アクセスしない。
+
+    近隣検索の座標補完はバックグラウンド非同期のため、ここでは
+    ``_schedule_coord_resolution`` を no-op に差し替えてスレッド生成を止める
+    （デーモンスレッドがテスト終了後に実 ``FilmarksClient`` ・実 ``coord_cache``
+    へアクセスして ``./data/`` に DB を生成するリークを防ぐ）。座標補完ロジック
+    自体は test_routers.py で ``_resolve_coords`` を直接呼んで検証する。
     """
     fake = FakeFilmarksClient(DEFAULT_PAGES)
     with mock.patch("app.routers.common.FilmarksClient", return_value=fake):
-        with TestClient(app) as c:
-            c.fake = fake  # type: ignore[attr-defined]
-            yield c
+        with mock.patch("app.routers.theaters._schedule_coord_resolution"):
+            with TestClient(app) as c:
+                c.fake = fake  # type: ignore[attr-defined]
+                yield c
 
 
 # --- 映画一覧（now / coming / upcoming / trend） ---
